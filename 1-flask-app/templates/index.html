@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+
+{% block title %}CRSP Public Companies{% endblock %}
+
+{% block extra_head %}
+<style>
+	.filter-bar {
+		display: flex;
+		flex-wrap: wrap;
+		gap: .75rem;
+		align-items: flex-end;
+		margin-bottom: 1.25rem;
+	}
+	.filter-bar .form-group { display: flex; flex-direction: column; }
+	.filter-bar label {
+		font-size: .8rem; font-weight: 500; margin-bottom: .2rem; color: #555;
+	}
+	.filter-bar select, .filter-bar input {
+		font-size: .85rem; padding: .35rem .5rem;
+		border: 1px solid #ccc; border-radius: 4px; min-width: 180px;
+	}
+	.filter-bar .btn-sm { font-size: .8rem; padding: .4rem .75rem; }
+	.stats-bar { font-size: .82rem; color: #666; margin-bottom: .5rem; }
+	.stat-cards {
+		display: flex; flex-wrap: wrap; gap: .75rem; margin-bottom: 1.25rem;
+	}
+	.stat-card {
+		background: #fff; border: 1px solid #e0e0e0; border-radius: 6px;
+		padding: .6rem 1.1rem; min-width: 150px; text-align: center;
+	}
+	.stat-card .stat-value { font-size: 1.4rem; font-weight: 700; color: #333; }
+	.stat-card .stat-label {
+		font-size: .72rem; color: #888;
+		text-transform: uppercase; letter-spacing: .3px;
+	}
+	.stat-card.nyse .stat-value { color: #0d6efd; }
+	.stat-card.nasdaq .stat-value { color: #6f42c1; }
+	.stat-card.amex .stat-value { color: #20c997; }
+	.stat-card.other .stat-value { color: #6c757d; }
+	#companies-table { font-size: .82rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+	<h4 class="mb-3">CRSP Public Companies</h4>
+
+	<!-- Stat Cards -->
+	<div class="stat-cards" id="statCards">
+		<div class="stat-card"><div class="stat-value" id="statTotal">-</div><div class="stat-label">Records</div></div>
+		<div class="stat-card"><div class="stat-value" id="statCompanies">-</div><div class="stat-label">Unique Companies</div></div>
+		<div class="stat-card"><div class="stat-value" id="statTickers">-</div><div class="stat-label">Unique Tickers</div></div>
+		<div class="stat-card"><div class="stat-value" id="statSics">-</div><div class="stat-label">SIC Codes</div></div>
+		<div class="stat-card nyse"><div class="stat-value" id="statNYSE">-</div><div class="stat-label">NYSE</div></div>
+		<div class="stat-card nasdaq"><div class="stat-value" id="statNASDAQ">-</div><div class="stat-label">NASDAQ</div></div>
+		<div class="stat-card amex"><div class="stat-value" id="statAMEX">-</div><div class="stat-label">AMEX</div></div>
+		<div class="stat-card other"><div class="stat-value" id="statOther">-</div><div class="stat-label">Other</div></div>
+	</div>
+
+	<!-- Filters -->
+	<div class="filter-bar">
+		<div class="form-group">
+			<label for="filterExchange">Exchange</label>
+			<select id="filterExchange" class="form-select form-select-sm">
+				<option value="">All Exchanges</option>
+			</select>
+		</div>
+		<div class="form-group">
+			<label for="filterShrcd">Share Code</label>
+			<select id="filterShrcd" class="form-select form-select-sm">
+				<option value="">All Share Codes</option>
+			</select>
+		</div>
+		<div class="form-group">
+			<label for="filterSic">SIC Code</label>
+			<select id="filterSic" class="form-select form-select-sm">
+				<option value="">All SIC Codes</option>
+			</select>
+		</div>
+		<div class="form-group">
+			<label for="filterShrcls">Share Class</label>
+			<select id="filterShrcls" class="form-select form-select-sm">
+				<option value="">All Classes</option>
+			</select>
+		</div>
+		<div class="form-group" style="align-self:flex-end;">
+			<button class="btn btn-outline-secondary btn-sm" id="btnClearFilters">Clear Filters</button>
+		</div>
+	</div>
+
+	<div class="stats-bar">
+		Showing <strong id="rowCount">0</strong> of <strong id="totalCount">0</strong> records
+	</div>
+
+	<div id="companies-table"></div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+	let allData = [];
+
+	const table = new Tabulator("#companies-table", {
+		height: "70vh",
+		layout: "fitDataFill",
+		placeholder: "Loading data…",
+		pagination: true,
+		paginationSize: 50,
+		paginationSizeSelector: [25, 50, 100, 250, 500],
+		movableColumns: true,
+		headerSortTriState: true,
+		initialSort: [{ column: "comnam", dir: "asc" }],
+		columns: [
+			{ title: "PERMNO", field: "permno", headerFilter: "input", width: 90, sorter: "number" },
+			{ title: "Company Name", field: "comnam", headerFilter: "input", width: 240 },
+			{ title: "Ticker", field: "ticker", headerFilter: "input", width: 90 },
+			{ title: "CUSIP", field: "cusip", headerFilter: "input", width: 110 },
+			{ title: "NCUSIP", field: "ncusip", headerFilter: "input", width: 110 },
+			{ title: "Exchange", field: "exchange", headerFilter: "input", width: 100 },
+			{ title: "EXCHCD", field: "exchcd", headerFilter: "input", width: 80, hozAlign: "center" },
+			{ title: "SIC", field: "siccd", headerFilter: "input", width: 80, hozAlign: "center" },
+			{ title: "SHRCD", field: "shrcd", headerFilter: "input", width: 80, hozAlign: "center" },
+			{ title: "SHRCLS", field: "shrcls", headerFilter: "input", width: 80, hozAlign: "center" },
+			{ title: "PERMCO", field: "permco", headerFilter: "input", width: 90, sorter: "number" },
+			{ title: "HEXCD", field: "hexcd", headerFilter: "input", width: 80, hozAlign: "center" },
+			{ title: "Name From", field: "namedt", headerFilter: "input", width: 110 },
+			{ title: "Name To", field: "nameenddt", headerFilter: "input", width: 110 },
+			{ title: "Start Date", field: "st_date", headerFilter: "input", width: 110 },
+			{ title: "End Date", field: "end_date", headerFilter: "input", width: 110 },
+			{ title: "Namedum", field: "namedum", headerFilter: "input", width: 90 },
+		],
+	});
+
+	function refreshStats() {
+		const rows = table.getRows("active");
+		const items = rows.map(function (r) { return r.getData(); });
+		document.getElementById("rowCount").textContent = items.length.toLocaleString();
+		document.getElementById("totalCount").textContent = allData.length.toLocaleString();
+
+		const companies = new Set(), tickers = new Set(), sics = new Set();
+		let nyse = 0, nasdaq = 0, amex = 0, other = 0;
+		items.forEach(function (r) {
+			if (r.permco) companies.add(r.permco);
+			if (r.ticker) tickers.add(r.ticker);
+			if (r.siccd) sics.add(r.siccd);
+			const ex = (r.exchange || "").toUpperCase();
+			if (ex === "NYSE") nyse++;
+			else if (ex === "NASDAQ") nasdaq++;
+			else if (ex === "AMEX" || ex === "NYSE AMER" || ex === "NYSE AMEX") amex++;
+			else other++;
+		});
+		document.getElementById("statTotal").textContent = items.length.toLocaleString();
+		document.getElementById("statCompanies").textContent = companies.size.toLocaleString();
+		document.getElementById("statTickers").textContent = tickers.size.toLocaleString();
+		document.getElementById("statSics").textContent = sics.size.toLocaleString();
+		document.getElementById("statNYSE").textContent = nyse.toLocaleString();
+		document.getElementById("statNASDAQ").textContent = nasdaq.toLocaleString();
+		document.getElementById("statAMEX").textContent = amex.toLocaleString();
+		document.getElementById("statOther").textContent = other.toLocaleString();
+	}
+
+	table.on("dataFiltered", function () { setTimeout(refreshStats, 0); });
+
+	function populateDropdown(selectId, values) {
+		const sel = document.getElementById(selectId);
+		const firstOpt = sel.options[0].textContent;
+		sel.innerHTML = "";
+		const allOpt = document.createElement("option");
+		allOpt.value = "";
+		allOpt.textContent = firstOpt;
+		sel.appendChild(allOpt);
+		values.sort().forEach(function (v) {
+			const opt = document.createElement("option");
+			opt.value = v;
+			opt.textContent = v;
+			sel.appendChild(opt);
+		});
+	}
+
+	fetch("{{ url_for('companies_api') }}")
+		.then(function (res) { return res.json(); })
+		.then(function (data) {
+			if (data.error) {
+				document.getElementById("companies-table").innerHTML =
+					'<div class="alert alert-danger">' + data.error + "</div>";
+				return;
+			}
+			allData = data;
+			table.setData(data).then(function () { refreshStats(); });
+
+			const exchanges = new Set(), shrcds = new Set(), sics = new Set(), classes = new Set();
+			data.forEach(function (r) {
+				if (r.exchange) exchanges.add(r.exchange);
+				if (r.shrcd) shrcds.add(r.shrcd);
+				if (r.siccd) sics.add(r.siccd);
+				if (r.shrcls) classes.add(r.shrcls);
+			});
+			populateDropdown("filterExchange", Array.from(exchanges));
+			populateDropdown("filterShrcd", Array.from(shrcds));
+			populateDropdown("filterSic", Array.from(sics));
+			populateDropdown("filterShrcls", Array.from(classes));
+		})
+		.catch(function (err) {
+			document.getElementById("companies-table").innerHTML =
+				'<div class="alert alert-danger">Failed to load data: ' + err + "</div>";
+		});
+
+	function applyDropdownFilters() {
+		const filters = [];
+		const ex = document.getElementById("filterExchange").value;
+		const sh = document.getElementById("filterShrcd").value;
+		const si = document.getElementById("filterSic").value;
+		const cls = document.getElementById("filterShrcls").value;
+		if (ex) filters.push({ field: "exchange", type: "=", value: ex });
+		if (sh) filters.push({ field: "shrcd", type: "=", value: sh });
+		if (si) filters.push({ field: "siccd", type: "=", value: si });
+		if (cls) filters.push({ field: "shrcls", type: "=", value: cls });
+		table.setFilter(filters);
+	}
+
+	["filterExchange", "filterShrcd", "filterSic", "filterShrcls"].forEach(function (id) {
+		document.getElementById(id).addEventListener("change", applyDropdownFilters);
+	});
+
+	document.getElementById("btnClearFilters").addEventListener("click", function () {
+		["filterExchange", "filterShrcd", "filterSic", "filterShrcls"].forEach(function (id) {
+			document.getElementById(id).value = "";
+		});
+		table.clearFilter(true);
+		table.clearHeaderFilter();
+	});
+});
+</script>
+{% endblock %}

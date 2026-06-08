@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>{% block title %}CRSP Public Companies{% endblock %}</title>
+
+		<link
+			href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+			rel="stylesheet"
+			integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+			crossorigin="anonymous"
+		/>
+
+		<link
+			href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator_simple.min.css"
+			rel="stylesheet"
+		/>
+
+		<style>
+			body { background-color: #f7f7fb; }
+			.page-wrapper { padding: 2rem 1rem 3rem; }
+			.navbar-brand { font-weight: 600; }
+		</style>
+
+		{% block extra_head %}{% endblock %}
+	</head>
+	<body>
+		<nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom">
+			<div class="container-fluid">
+				<a class="navbar-brand" href="{{ url_for('index') }}">CRSP Browser</a>
+				<div class="collapse navbar-collapse">
+					<ul class="navbar-nav me-auto mb-2 mb-lg-0">
+						<li class="nav-item">
+							<a class="nav-link {% if request.endpoint == 'index' %}active{% endif %}" href="{{ url_for('index') }}">Public Companies (WRDS)</a>
+						</li>
+						<li class="nav-item dropdown">
+							<a class="nav-link dropdown-toggle {% if request.endpoint == 'teyyub' %}active{% endif %}"
+								href="#" id="teyyubDropdown" role="button"
+								data-bs-toggle="dropdown" aria-expanded="false">
+								Teyyub Data
+							</a>
+							<ul class="dropdown-menu" aria-labelledby="teyyubDropdown">
+								{% for d in teyyub_datasets %}
+								<li>
+									<a class="dropdown-item {% if request.endpoint == 'teyyub' and request.view_args.key == d.key %}active{% endif %}"
+										href="{{ url_for('teyyub', key=d.key) }}">{{ d.label }}</a>
+								</li>
+								{% endfor %}
+							</ul>
+						</li>
+					</ul>
+				</div>
+			</div>
+		</nav>
+
+		<div class="page-wrapper">
+			{% block content %}{% endblock %}
+		</div>
+
+		<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+		{% block extra_scripts %}{% endblock %}
+	</body>
+</html>

@@ -1,0 +1,296 @@
+{% extends "base.html" %}
+
+{% block title %}{{ dataset_label }}{% endblock %}
+
+{% block extra_head %}
+<style>
+	.stats-bar { font-size: .82rem; color: #666; margin-bottom: .5rem; }
+	.stat-cards { display: flex; flex-wrap: wrap; gap: .75rem; margin-bottom: 1rem; }
+	.stat-card {
+		background: #fff; border: 1px solid #e0e0e0; border-radius: 6px;
+		padding: .55rem 1rem; min-width: 140px; text-align: center;
+	}
+	.stat-card .stat-value { font-size: 1.3rem; font-weight: 700; color: #333; }
+	.stat-card .stat-label {
+		font-size: .7rem; color: #888;
+		text-transform: uppercase; letter-spacing: .3px;
+	}
+	.toolbar {
+		display: flex; flex-wrap: wrap; gap: .5rem;
+		align-items: center; margin-bottom: .6rem;
+	}
+	.toolbar .btn-sm { font-size: .78rem; }
+	.col-toggle-panel {
+		max-height: 220px; overflow-y: auto;
+		border: 1px solid #e0e0e0; border-radius: 6px;
+		padding: .6rem .8rem; background: #fff;
+		margin-bottom: .75rem; display: none;
+	}
+	.col-toggle-panel.show { display: block; }
+	.col-toggle-panel label {
+		display: inline-flex; align-items: center; gap: .3rem;
+		font-size: .78rem; margin: .15rem .9rem .15rem 0;
+	}
+	.tabulator { font-size: .8rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+	<h4 class="mb-3">{{ dataset_label }}</h4>
+
+	<div class="stat-cards" id="datasetStatCards">
+		<!-- populated from /api/teyyub/<key>/stats -->
+	</div>
+
+	<div class="stat-cards">
+		<div class="stat-card">
+			<div class="stat-value" id="statTotal">-</div>
+			<div class="stat-label">Rows Loaded</div>
+		</div>
+		<div class="stat-card">
+			<div class="stat-value" id="statFiltered">-</div>
+			<div class="stat-label">Matching Filters</div>
+		</div>
+		<div class="stat-card">
+			<div class="stat-value" id="statCols">-</div>
+			<div class="stat-label">Columns</div>
+		</div>
+	</div>
+
+	<div class="toolbar">
+		<button class="btn btn-outline-secondary btn-sm" id="btnToggleCols">
+			Show/Hide Columns
+		</button>
+		<button class="btn btn-outline-secondary btn-sm" id="btnClearFilters">
+			Clear Filters
+		</button>
+		<button class="btn btn-primary btn-sm" id="btnDownload">
+			Download CSV (filtered)
+		</button>
+		<span class="text-muted small ms-auto" id="loader"></span>
+	</div>
+
+	<div class="col-toggle-panel" id="colTogglePanel"></div>
+
+	<div id="previewBanner" class="alert alert-info py-2 px-3 small mb-2" style="display:none;"></div>
+
+	<div id="data-table"></div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+	const DATASET_KEY = {{ dataset_key|tojson }};
+	// Large datasets use server-side (remote) pagination.
+	const REMOTE_KEYS = new Set(["sub_merged"]);
+	const isRemote = REMOTE_KEYS.has(DATASET_KEY);
+
+	const loader = document.getElementById("loader");
+	loader.textContent = "Loading…";
+
+	const banner = document.getElementById("previewBanner");
+	let previewLimit = 5000;
+	let table = null;
+	let totalAll = 0;
+
+	// Render dataset-level stat cards from server
+	fetch("/api/teyyub/" + DATASET_KEY + "/stats")
+		.then(function (r) { return r.json(); })
+		.then(function (resp) {
+			const host = document.getElementById("datasetStatCards");
+			host.innerHTML = "";
+			(resp.stats || []).forEach(function (s) {
+				const card = document.createElement("div");
+				card.className = "stat-card";
+				card.innerHTML =
+					'<div class="stat-value">' +
+					(s.value != null ? s.value.toLocaleString() : "-") +
+					'</div><div class="stat-label">' + s.label + '</div>';
+				host.appendChild(card);
+			});
+		})
+		.catch(function () { /* non-fatal */ });
+
+	function updateBanner(isPreview, fullTotal) {
+		if (isPreview) {
+			banner.style.display = "";
+			banner.textContent =
+				"Showing the first " + previewLimit.toLocaleString() +
+				" of " + (fullTotal || totalAll).toLocaleString() +
+				" rows. Apply a filter or sort to query the full dataset.";
+		} else {
+			banner.style.display = "none";
+		}
+	}
+
+	function buildColumns(cols) {
+		return cols.map(function (name) {
+			return {
+				title: name,
+				field: name,
+				headerSort: true,
+				headerFilter: "input",
+				headerFilterLiveFilter: !isRemote,
+				resizable: true,
+				minWidth: 80,
+			};
+		});
+	}
+
+	function setupColToggle(columns) {
+		const panel = document.getElementById("colTogglePanel");
+		panel.innerHTML = "";
+		columns.forEach(function (c) {
+			const id = "colchk-" + c.field;
+			const wrap = document.createElement("label");
+			wrap.innerHTML =
+				'<input type="checkbox" id="' + id + '" checked> ' + c.field;
+			panel.appendChild(wrap);
+			wrap.querySelector("input").addEventListener("change", function (e) {
+				if (!table) return;
+				if (e.target.checked) table.showColumn(c.field);
+				else table.hideColumn(c.field);
+			});
+		});
+	}
+
+	function refreshLocalStats() {
+		if (!table) return;
+		const total = (table.getData() || []).length;
+		const visible = table.getData("active").length;
+		document.getElementById("statTotal").textContent = total.toLocaleString();
+		document.getElementById("statFiltered").textContent = visible.toLocaleString();
+		document.getElementById("statCols").textContent =
+			table.getColumns().length.toLocaleString();
+	}
+
+	function setRemoteStats(lastRow, ncols) {
+		document.getElementById("statTotal").textContent = totalAll.toLocaleString();
+		document.getElementById("statFiltered").textContent = (lastRow || 0).toLocaleString();
+		document.getElementById("statCols").textContent = (ncols || 0).toLocaleString();
+	}
+
+	fetch("/api/teyyub/" + DATASET_KEY + "/columns")
+		.then(function (r) { return r.json(); })
+		.then(function (meta) {
+			if (meta.error) throw new Error(meta.error);
+			const columns = buildColumns(meta.columns);
+			totalAll = meta.total;
+			if (meta.preview_limit) previewLimit = meta.preview_limit;
+
+			const config = {
+				height: "70vh",
+				layout: "fitDataFill",
+				placeholder: "No data",
+				columns: columns,
+				movableColumns: true,
+				headerSortTriState: true,
+				pagination: true,
+				paginationSize: 50,
+				paginationSizeSelector: [25, 50, 100, 250, 500],
+			};
+
+			if (isRemote) {
+				Object.assign(config, {
+					ajaxURL: "/api/teyyub/" + DATASET_KEY,
+					paginationMode: "remote",
+					sortMode: "remote",
+					filterMode: "remote",
+					ajaxResponse: function (url, params, response) {
+						setRemoteStats(response.last_row, columns.length);
+						updateBanner(!!response.preview, response.full_total);
+						loader.textContent = "";
+						return response;
+					},
+				});
+			}
+
+			table = new Tabulator("#data-table", config);
+			setupColToggle(columns);
+
+			if (!isRemote) {
+				fetch("/api/teyyub/" + DATASET_KEY + "?paginate=false")
+					.then(function (r) { return r.json(); })
+					.then(function (data) {
+						if (data && data.error) throw new Error(data.error);
+						table.setData(data).then(function () {
+							refreshLocalStats();
+							loader.textContent = "";
+						});
+					})
+					.catch(function (err) {
+						loader.textContent = "Load failed: " + err.message;
+					});
+
+				table.on("dataFiltered", function () {
+					setTimeout(refreshLocalStats, 0);
+				});
+			}
+		})
+		.catch(function (err) {
+			loader.textContent = "Failed: " + err.message;
+		});
+
+	document.getElementById("btnToggleCols").addEventListener("click", function () {
+		document.getElementById("colTogglePanel").classList.toggle("show");
+	});
+
+	document.getElementById("btnClearFilters").addEventListener("click", function () {
+		if (!table) return;
+		table.clearHeaderFilter();
+		table.clearFilter(true);
+	});
+
+	document.getElementById("btnDownload").addEventListener("click", function () {
+		if (!table) return;
+		if (isRemote) {
+			const params = new URLSearchParams();
+			params.set("paginate", "false");
+			table.getHeaderFilters().forEach(function (f, i) {
+				if (f.value === "" || f.value == null) return;
+				params.append("filters[" + i + "][field]", f.field);
+				params.append("filters[" + i + "][type]", f.type || "like");
+				params.append("filters[" + i + "][value]", f.value);
+			});
+			table.getSorters().forEach(function (s, i) {
+				params.append("sorters[" + i + "][field]", s.field);
+				params.append("sorters[" + i + "][dir]", s.dir);
+			});
+			fetch("/api/teyyub/" + DATASET_KEY + "?" + params.toString())
+				.then(function (r) { return r.json(); })
+				.then(function (rows) {
+					downloadJsonAsCsv(rows, DATASET_KEY + "_filtered.csv");
+				});
+		} else {
+			table.download("csv", DATASET_KEY + "_filtered.csv");
+		}
+	});
+
+	function downloadJsonAsCsv(rows, filename) {
+		if (!rows || !rows.length) { alert("No rows to export."); return; }
+		const cols = Object.keys(rows[0]);
+		const esc = function (v) {
+			if (v == null) return "";
+			const s = String(v);
+			if (s.indexOf(",") >= 0 || s.indexOf('"') >= 0 || s.indexOf("\n") >= 0) {
+				return '"' + s.replace(/"/g, '""') + '"';
+			}
+			return s;
+		};
+		const lines = [cols.join(",")];
+		rows.forEach(function (r) {
+			lines.push(cols.map(function (c) { return esc(r[c]); }).join(","));
+		});
+		const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement("a");
+		a.href = url; a.download = filename;
+		document.body.appendChild(a); a.click();
+		setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 100);
+	}
+});
+</script>
+{% endblock %}

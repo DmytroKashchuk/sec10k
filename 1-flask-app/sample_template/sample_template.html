@@ -1,0 +1,400 @@
+{% extends "base.html" %}
+
+{% block title %}CVE Summary Browser{% endblock %}
+
+{% block extra_head %}
+<style>
+	.filter-bar {
+		display: flex;
+		flex-wrap: wrap;
+		gap: .75rem;
+		align-items: flex-end;
+		margin-bottom: 1.25rem;
+	}
+	.filter-bar .form-group {
+		display: flex;
+		flex-direction: column;
+	}
+	.filter-bar label {
+		font-size: .8rem;
+		font-weight: 500;
+		margin-bottom: .2rem;
+		color: #555;
+	}
+	.filter-bar select,
+	.filter-bar input {
+		font-size: .85rem;
+		padding: .35rem .5rem;
+		border: 1px solid #ccc;
+		border-radius: 4px;
+		min-width: 180px;
+	}
+	.filter-bar .btn-sm {
+		font-size: .8rem;
+		padding: .4rem .75rem;
+	}
+	.stats-bar {
+		font-size: .82rem;
+		color: #666;
+		margin-bottom: .5rem;
+	}
+	.stat-cards {
+		display: flex;
+		flex-wrap: wrap;
+		gap: .75rem;
+		margin-bottom: 1.25rem;
+	}
+	.stat-card {
+		background: #fff;
+		border: 1px solid #e0e0e0;
+		border-radius: 6px;
+		padding: .6rem 1.1rem;
+		min-width: 140px;
+		text-align: center;
+	}
+	.stat-card .stat-value {
+		font-size: 1.5rem;
+		font-weight: 700;
+		color: #333;
+	}
+	.stat-card .stat-label {
+		font-size: .75rem;
+		color: #888;
+		text-transform: uppercase;
+		letter-spacing: .3px;
+	}
+	.stat-card.critical .stat-value { color: #dc3545; }
+	.stat-card.high .stat-value { color: #fd7e14; }
+	.stat-card.medium .stat-value { color: #ffc107; }
+	.stat-card.low .stat-value { color: #198754; }
+	#cve-table {
+		font-size: .85rem;
+	}
+	.severity-badge {
+		display: inline-block;
+		padding: 1px 7px;
+		border-radius: 3px;
+		font-size: .78rem;
+		font-weight: 600;
+		min-width: 28px;
+		text-align: center;
+	}
+	.sev-critical { background: #f8d7da; color: #842029; }
+	.sev-high { background: #ffe5d0; color: #984c0c; }
+	.sev-medium { background: #fff3cd; color: #664d03; }
+	.sev-low { background: #d1e7dd; color: #0f5132; }
+	.sev-zero { background: #f0f0f0; color: #999; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+	<h4 class="mb-3">CVE Summary Browser</h4>
+
+	<!-- Stat Cards -->
+	<div class="stat-cards" id="statCards">
+		<div class="stat-card"><div class="stat-value" id="statTotal">-</div><div class="stat-label">Total Products</div></div>
+		<div class="stat-card"><div class="stat-value" id="statVendors">-</div><div class="stat-label">Vendors</div></div>
+		<div class="stat-card"><div class="stat-value" id="statWithCves">-</div><div class="stat-label">With CVEs</div></div>
+		<div class="stat-card"><div class="stat-value" id="statTotalCves">-</div><div class="stat-label">Total CVEs</div></div>
+		<div class="stat-card critical"><div class="stat-value" id="statCritical">-</div><div class="stat-label">Critical</div></div>
+		<div class="stat-card high"><div class="stat-value" id="statHigh">-</div><div class="stat-label">High</div></div>
+		<div class="stat-card medium"><div class="stat-value" id="statMedium">-</div><div class="stat-label">Medium</div></div>
+		<div class="stat-card low"><div class="stat-value" id="statLow">-</div><div class="stat-label">Low</div></div>
+	</div>
+
+	<!-- Filters -->
+	<div class="filter-bar">
+		<div class="form-group">
+			<label for="filterCategory">Product Category</label>
+			<select id="filterCategory" class="form-select form-select-sm">
+				<option value="">All Categories</option>
+			</select>
+		</div>
+		<div class="form-group">
+			<label for="filterSeries">Product Series</label>
+			<select id="filterSeries" class="form-select form-select-sm">
+				<option value="">All Series</option>
+			</select>
+		</div>
+		<div class="form-group">
+			<label for="filterVendor">Vendor Name</label>
+			<select id="filterVendor" class="form-select form-select-sm">
+				<option value="">All Vendors</option>
+			</select>
+		</div>
+		<div class="form-group">
+			<label for="filterMatch">Match Method</label>
+			<select id="filterMatch" class="form-select form-select-sm">
+				<option value="">All Methods</option>
+			</select>
+		</div>
+		<div class="form-group">
+			<label for="filterHasCve">CVE Status</label>
+			<select id="filterHasCve" class="form-select form-select-sm">
+				<option value="">All</option>
+				<option value="yes">Has CVEs</option>
+				<option value="no">No CVEs</option>
+			</select>
+		</div>
+		<div class="form-group" style="align-self:flex-end;">
+			<button class="btn btn-outline-secondary btn-sm" id="btnClearFilters">Clear Filters</button>
+		</div>
+	</div>
+
+	<div class="stats-bar">
+		Showing <strong id="rowCount">0</strong> of <strong id="totalCount">0</strong> records
+	</div>
+
+	<div id="cve-table"></div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+	let allData = [];
+
+	function sevFormatter(cell) {
+		const v = parseInt(cell.getValue()) || 0;
+		const field = cell.getColumn().getField();
+		let cls = "sev-zero";
+		if (v > 0) {
+			if (field === "critical") cls = "sev-critical";
+			else if (field === "high") cls = "sev-high";
+			else if (field === "medium") cls = "sev-medium";
+			else if (field === "low") cls = "sev-low";
+		}
+		return '<span class="severity-badge ' + cls + '">' + v + '</span>';
+	}
+
+	const table = new Tabulator("#cve-table", {
+		height: "65vh",
+		layout: "fitDataFill",
+		placeholder: "Loading data…",
+		pagination: true,
+		paginationSize: 50,
+		paginationSizeSelector: [25, 50, 100, 250, 500],
+		movableColumns: true,
+		headerSortTriState: true,
+		initialSort: [{ column: "total_cves", dir: "desc" }],
+		columns: [
+			{
+				title: "Vendor",
+				field: "VendorName",
+				headerFilter: "input",
+				headerFilterPlaceholder: "Search…",
+				width: 160,
+			},
+			{
+				title: "Product",
+				field: "Product",
+				headerFilter: "input",
+				headerFilterPlaceholder: "Search…",
+				width: 200,
+			},
+			{
+				title: "Category",
+				field: "ProductCategory",
+				headerFilter: "input",
+				headerFilterPlaceholder: "Search…",
+				width: 150,
+			},
+			{
+				title: "Series",
+				field: "ProductSeries",
+				headerFilter: "input",
+				headerFilterPlaceholder: "Search…",
+				width: 140,
+			},
+			{
+				title: "Total CVEs",
+				field: "total_cves",
+				sorter: "number",
+				hozAlign: "center",
+				headerFilter: "number",
+				headerFilterPlaceholder: "Min…",
+				headerFilterFunc: ">=",
+				width: 110,
+			},
+			{
+				title: "Critical",
+				field: "critical",
+				sorter: "number",
+				hozAlign: "center",
+				formatter: sevFormatter,
+				headerFilter: "number",
+				headerFilterPlaceholder: "Min…",
+				headerFilterFunc: ">=",
+				width: 95,
+			},
+			{
+				title: "High",
+				field: "high",
+				sorter: "number",
+				hozAlign: "center",
+				formatter: sevFormatter,
+				headerFilter: "number",
+				headerFilterPlaceholder: "Min…",
+				headerFilterFunc: ">=",
+				width: 85,
+			},
+			{
+				title: "Medium",
+				field: "medium",
+				sorter: "number",
+				hozAlign: "center",
+				formatter: sevFormatter,
+				headerFilter: "number",
+				headerFilterPlaceholder: "Min…",
+				headerFilterFunc: ">=",
+				width: 95,
+			},
+			{
+				title: "Low",
+				field: "low",
+				sorter: "number",
+				hozAlign: "center",
+				formatter: sevFormatter,
+				headerFilter: "number",
+				headerFilterPlaceholder: "Min…",
+				headerFilterFunc: ">=",
+				width: 80,
+			},
+			{
+				title: "CPE Vendor",
+				field: "cpe_vendor",
+				headerFilter: "input",
+				headerFilterPlaceholder: "Search…",
+				width: 140,
+			},
+			{
+				title: "CPE Product",
+				field: "cpe_product",
+				headerFilter: "input",
+				headerFilterPlaceholder: "Search…",
+				width: 150,
+			},
+			{
+				title: "Match Method",
+				field: "match_method",
+				headerFilter: "input",
+				headerFilterPlaceholder: "Search…",
+				width: 170,
+			},
+		],
+	});
+
+	function refreshStats() {
+		var rows = table.getRows("active");
+		var items = rows.map(function (r) { return r.getData(); });
+		document.getElementById("rowCount").textContent = items.length;
+		document.getElementById("totalCount").textContent = allData.length;
+
+		var vendors = new Set();
+		var totalCves = 0, totalCritical = 0, totalHigh = 0, totalMedium = 0, totalLow = 0, withCves = 0;
+		items.forEach(function (r) {
+			if (r.VendorName) vendors.add(r.VendorName);
+			var tc = parseInt(r.total_cves) || 0;
+			totalCves += tc;
+			if (tc > 0) withCves++;
+			totalCritical += parseInt(r.critical) || 0;
+			totalHigh += parseInt(r.high) || 0;
+			totalMedium += parseInt(r.medium) || 0;
+			totalLow += parseInt(r.low) || 0;
+		});
+		document.getElementById("statTotal").textContent = items.length.toLocaleString();
+		document.getElementById("statVendors").textContent = vendors.size.toLocaleString();
+		document.getElementById("statWithCves").textContent = withCves.toLocaleString();
+		document.getElementById("statTotalCves").textContent = totalCves.toLocaleString();
+		document.getElementById("statCritical").textContent = totalCritical.toLocaleString();
+		document.getElementById("statHigh").textContent = totalHigh.toLocaleString();
+		document.getElementById("statMedium").textContent = totalMedium.toLocaleString();
+		document.getElementById("statLow").textContent = totalLow.toLocaleString();
+	}
+
+	table.on("dataFiltered", function () { setTimeout(refreshStats, 0); });
+
+	function populateDropdown(selectId, values) {
+		const sel = document.getElementById(selectId);
+		const firstOpt = sel.options[0].textContent;
+		sel.innerHTML = "";
+		const allOpt = document.createElement("option");
+		allOpt.value = "";
+		allOpt.textContent = firstOpt;
+		sel.appendChild(allOpt);
+		values.sort().forEach(function (v) {
+			const opt = document.createElement("option");
+			opt.value = v;
+			opt.textContent = v;
+			sel.appendChild(opt);
+		});
+	}
+
+	/* Fetch data */
+	fetch("{{ url_for('cve_summary_api') }}")
+		.then(function (res) { return res.json(); })
+		.then(function (data) {
+			if (data.error) {
+				document.getElementById("cve-table").innerHTML =
+					'<div class="alert alert-danger">' + data.error + "</div>";
+				return;
+			}
+			allData = data;
+			table.setData(data).then(function () { refreshStats(); });
+
+			/* Unique values for dropdowns */
+			const categories = new Set(), series = new Set(), vendors = new Set(), methods = new Set();
+			data.forEach(function (r) {
+				if (r.ProductCategory) categories.add(r.ProductCategory);
+				if (r.ProductSeries) series.add(r.ProductSeries);
+				if (r.VendorName) vendors.add(r.VendorName);
+				if (r.match_method) methods.add(r.match_method);
+			});
+
+			populateDropdown("filterCategory", Array.from(categories));
+			populateDropdown("filterSeries", Array.from(series));
+			populateDropdown("filterVendor", Array.from(vendors));
+			populateDropdown("filterMatch", Array.from(methods));
+		})
+		.catch(function (err) {
+			document.getElementById("cve-table").innerHTML =
+				'<div class="alert alert-danger">Failed to load data: ' + err + "</div>";
+		});
+
+	/* Dropdown filter handlers */
+	function applyDropdownFilters() {
+		const filters = [];
+		const cat = document.getElementById("filterCategory").value;
+		const ser = document.getElementById("filterSeries").value;
+		const ven = document.getElementById("filterVendor").value;
+		const mtch = document.getElementById("filterMatch").value;
+		const hasCve = document.getElementById("filterHasCve").value;
+		if (cat) filters.push({ field: "ProductCategory", type: "=", value: cat });
+		if (ser) filters.push({ field: "ProductSeries", type: "=", value: ser });
+		if (ven) filters.push({ field: "VendorName", type: "=", value: ven });
+		if (mtch) filters.push({ field: "match_method", type: "=", value: mtch });
+		if (hasCve === "yes") filters.push({ field: "total_cves", type: ">", value: 0 });
+		if (hasCve === "no") filters.push({ field: "total_cves", type: "=", value: 0 });
+		table.setFilter(filters);
+	}
+
+	document.getElementById("filterCategory").addEventListener("change", applyDropdownFilters);
+	document.getElementById("filterSeries").addEventListener("change", applyDropdownFilters);
+	document.getElementById("filterVendor").addEventListener("change", applyDropdownFilters);
+	document.getElementById("filterMatch").addEventListener("change", applyDropdownFilters);
+	document.getElementById("filterHasCve").addEventListener("change", applyDropdownFilters);
+
+	document.getElementById("btnClearFilters").addEventListener("click", function () {
+		document.getElementById("filterCategory").value = "";
+		document.getElementById("filterSeries").value = "";
+		document.getElementById("filterVendor").value = "";
+		document.getElementById("filterMatch").value = "";
+		document.getElementById("filterHasCve").value = "";
+		table.clearFilter(true);
+		table.clearHeaderFilter();
+	});
+});
+</script>
+{% endblock %}
