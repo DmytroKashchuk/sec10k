@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}SEC 10K Longitudinal Study{% endblock %}
+
+{% block extra_head %}
+<style>
+	.home-wrapper { max-width: 1000px; margin: 0 auto; }
+	.brainstorm-img {
+		width: 100%; height: auto; border: 1px solid #e0e0e0;
+		border-radius: 6px; background: #fff;
+	}
+	.brainstorm-section h2 {
+		font-size: 1.25rem; font-weight: 600; color: #333;
+		margin-top: 1.75rem; margin-bottom: .6rem;
+		border-bottom: 1px solid #e6e6e6; padding-bottom: .35rem;
+	}
+	.brainstorm-section h3 {
+		font-size: 1.05rem; font-weight: 600; color: #444;
+		margin-top: 1.4rem; margin-bottom: .5rem;
+	}
+	.brainstorm-section ul { margin-bottom: .4rem; }
+	.brainstorm-section li { margin-bottom: .15rem; color: #555; }
+	.brainstorm-section .note { color: #888; font-style: italic; }
+	.brainstorm-divider { border: 0; border-top: 1px solid #ddd; margin: 2rem 0; }
+	.lead-note { color: #666; font-size: .95rem; margin: 1rem 0 1.5rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="home-wrapper">
+	<h4 class="mb-3">SEC 10K Longitudinal Study</h4>
+
+	<img src="{{ url_for('imgs', filename='brainstorming.png') }}"
+		alt="Brainstorming diagram" class="brainstorm-img mb-3" />
+
+	<p class="lead-note">Explanation of the brainstorming above.</p>
+
+	<div class="brainstorm-section">
+		<h2>1. All 10-Ks over the 2009–2026</h2>
+		<ul>
+			<li>a. Effect of SEC guidance
+				<ul>
+					<li>2011, 2018, 2023</li>
+				</ul>
+			</li>
+		</ul>
+
+		<h2>2. Incident Reporting: SEC vs. others (Maryland, Temple, VERIS, Ransomware.live etc.)</h2>
+		<ul>
+			<li>a. Pre 2023
+				<ul>
+					<li>WACCO revisited <span class="note">(Abu thesis)</span></li>
+				</ul>
+			</li>
+			<li>b. Post 2023
+				<ul>
+					<li>8-K</li>
+				</ul>
+			</li>
+		</ul>
+
+		<h3>3. Attack Filers</h3>
+		<ul>
+			<li>Financials [WEIS 26 Teyyub]
+				<ul>
+					<li>FinImpact &rarr; Attacked? + 10k statements + SW Control Count</li>
+				</ul>
+			</li>
+			<li>Critical Infra SW [WEIS 26 Abu]</li>
+			<li>Critical Infra IC
+				<ul>
+					<li>DE Paper: Quantifying Security Training in Organizations Through the Analysis of U.S. SEC 10-K Filing, Jonas Hielscher.
+						<a href="https://figshare.com/articles/dataset/Replication_Package_For_The_Project_Moving_Beyond_Vendor_Claims_Quantifying_Security_Training_in_Organizations_Through_the_Analysis_of_U_S_SEC_10-K_Filings_/28789001"
+							target="_blank" rel="noopener">Paper</a>
+					</li>
+				</ul>
+			</li>
+			<li>10K Statements (525 Adv)</li>
+		</ul>
+
+		<h3>4. Contig. Vs. Stmts. detail</h3>
+		<ul>
+			<li>SWDB Security Controls per user (SEC)</li>
+			<li>Sec statements (10K)</li>
+		</ul>
+
+		<hr class="brainstorm-divider" />
+
+		<h3>0. Construct Rep. of PublicCompanies w/ 10Ks (&ge;3)</h3>
+
+		<h3>1. LLM for 10-K Sentences</h3>
+		<ul>
+			<li>Done: Cyber or Not</li>
+		</ul>
+
+		<h3>2. Sentence Extraction for all 10-Ks (18K Teyyub)</h3>
+
+		<h3>3. Attack Incidence for Public Companies.</h3>
+
+		<h3>4. Public Companies to SWDB Mapping</h3>
+
+		<h3>5. Enterprise github [SCORED]</h3>
+	</div>
+</div>
+{% endblock %}

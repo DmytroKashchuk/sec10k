@@ -1,7 +1,7 @@
 import math
 import os
 import time
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, send_from_directory
 
 import pandas as pd
 
@@ -137,7 +137,17 @@ def warmup_caches():
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("home.html")
+
+
+@app.route("/companies")
+def companies():
+    return render_template("companies.html")
+
+
+@app.route("/imgs/<path:filename>")
+def imgs(filename):
+    return send_from_directory(os.path.join(BASE_DIR, "imgs"), filename)
 
 
 @app.route("/api/companies")
