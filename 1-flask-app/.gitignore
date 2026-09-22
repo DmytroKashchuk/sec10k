@@ -1,0 +1,4 @@
+# CSV files
+*.csv
+*.jsonl
+*.json

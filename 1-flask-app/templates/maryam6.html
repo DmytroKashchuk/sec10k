@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+
+{% block title %}{{ dataset_label }}{% endblock %}
+
+{% block extra_head %}
+<style>
+	.stat-cards { display: flex; flex-wrap: wrap; gap: .75rem; margin-bottom: 1rem; }
+	.stat-card {
+		background: #fff; border: 1px solid #e0e0e0; border-radius: 6px;
+		padding: .55rem 1rem; min-width: 140px; text-align: center;
+	}
+	.stat-card .stat-value { font-size: 1.3rem; font-weight: 700; color: #333; }
+	.stat-card .stat-label {
+		font-size: .7rem; color: #888;
+		text-transform: uppercase; letter-spacing: .3px;
+	}
+	.stat-card.hot { border-color: #f0ad4e; background: #fffaf0; }
+	.stat-card.hot .stat-value { color: #b45309; }
+	.toolbar {
+		display: flex; flex-wrap: wrap; gap: .5rem;
+		align-items: center; margin-bottom: .6rem;
+	}
+	.toolbar .btn-sm { font-size: .78rem; }
+	.tabulator { font-size: .8rem; }
+	.tabulator .tabulator-cell { white-space: normal; }
+	.hint { font-size: .75rem; color: #888; }
+	.db-hit {
+		display: inline-block; font-size: .72rem; font-weight: 600;
+		color: #14532d; background: #dcfce7; border: 1px solid #bbf7d0;
+		border-radius: 4px; padding: 0 .35rem; max-width: 100%;
+		overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+	}
+	.inc-badge {
+		display: inline-block; min-width: 1.6em; text-align: center;
+		font-weight: 700; border-radius: 999px; padding: .05rem .45rem;
+		font-size: .75rem; background: #eee; color: #999;
+	}
+	.inc-badge.pos { background: #fde68a; color: #92400e; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+	<h4 class="mb-1">{{ dataset_label }}</h4>
+	<p class="hint mb-3">
+		SWDB (Spiceworks) accounts matched to SEC 10-K filers
+		(<code>swdb_acc_id</code>, <code>swdb_acc_name</code>, <code>sec10k</code>)
+		and to six cyber-incident databases (Ransomware.live, Maryland AG, Grained,
+		EU, VERIS, Temple). A non-empty database cell means the company appears in
+		that incident DB. The <code>incidents</code> column counts how many of the
+		6 DBs matched — it accepts <code>&gt;</code>, <code>&gt;=</code>,
+		<code>=</code>… in the header filter.
+	</p>
+
+	<div class="stat-cards" id="datasetStatCards"></div>
+
+	<div class="toolbar">
+		<button class="btn btn-warning btn-sm" id="btnIncidentsOnly">
+			⚠️ Only 10-Ks with ≥1 incident (6 DBs)
+		</button>
+		<button class="btn btn-outline-secondary btn-sm" id="btnClearFilters">Clear Filters</button>
+		<button class="btn btn-primary btn-sm" id="btnDownload">Download CSV (filtered)</button>
+		<span class="text-muted small ms-auto" id="loader"></span>
+	</div>
+
+	<div id="data-table"></div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+	const API = "/api/maryam6";
+	const NUMERIC = new Set(["swdb_acc_id", "incidents"]);
+
+	const loader = document.getElementById("loader");
+	loader.textContent = "Loading…";
+
+	let table = null;
+	let incidentsOnly = false;
+	let dbLabels = {};
+
+	function currentFilterParams() {
+		const params = new URLSearchParams();
+		if (incidentsOnly) params.set("incidents_only", "1");
+		if (!table) return params;
+		let i = 0;
+		table.getHeaderFilters().forEach(function (f) {
+			let value = f.value;
+			if (value === "" || value == null) return;
+			let type = "like";
+			if (NUMERIC.has(f.field)) {
+				const m = String(value).trim().match(/^(>=|<=|!=|>|<|=)\s*(.+)$/);
+				if (m) { type = m[1]; value = m[2]; }
+				else if (f.field === "incidents") { type = "="; }
+			}
+			params.append("filters[" + i + "][field]", f.field);
+			params.append("filters[" + i + "][type]", type);
+			params.append("filters[" + i + "][value]", value);
+			i += 1;
+		});
+		return params;
+	}
+
+	function renderStats(stats) {
+		const host = document.getElementById("datasetStatCards");
+		host.innerHTML = "";
+		(stats || []).forEach(function (s, idx) {
+			const card = document.createElement("div");
+			card.className = "stat-card" + (idx === 1 ? " hot" : "");
+			card.innerHTML =
+				'<div class="stat-value">' + (s.value != null ? s.value.toLocaleString() : "-") + '</div>' +
+				'<div class="stat-label">' + s.label + '</div>';
+			host.appendChild(card);
+		});
+	}
+
+	function refreshStats() {
+		const qs = currentFilterParams().toString();
+		fetch(API + "/stats" + (qs ? "?" + qs : ""))
+			.then(function (r) { return r.json(); })
+			.then(function (resp) { renderStats(resp.stats); })
+			.catch(function () { /* non-fatal */ });
+	}
+
+	function escapeHtml(s) {
+		return String(s)
+			.replace(/&/g, "&amp;").replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+	}
+
+	function dbHitFormatter(cell) {
+		const v = cell.getValue();
+		if (v == null || v === "") return "";
+		return '<span class="db-hit" title="' + escapeHtml(v) + '">✓ ' + escapeHtml(v) + '</span>';
+	}
+
+	function incidentsFormatter(cell) {
+		const n = Number(cell.getValue()) || 0;
+		return '<span class="inc-badge' + (n > 0 ? " pos" : "") + '">' + n + '</span>';
+	}
+
+	function buildColumns(cols, dbCols) {
+		const dbSet = new Set(dbCols);
+		return cols.map(function (name) {
+			const col = {
+				title: name,
+				field: name,
+				headerSort: true,
+				headerFilter: "input",
+				headerFilterLiveFilter: false,
+				resizable: true,
+				minWidth: 90,
+			};
+			if (name === "swdb_acc_id") {
+				col.width = 110;
+				col.hozAlign = "right";
+			}
+			if (name === "swdb_acc_name" || name === "sec10k") col.widthGrow = 2;
+			if (name === "incidents") {
+				col.width = 105;
+				col.hozAlign = "center";
+				col.formatter = incidentsFormatter;
+				col.headerFilterPlaceholder = "e.g. >=1";
+			}
+			if (dbSet.has(name)) {
+				col.title = dbLabels[name] || name;
+				col.formatter = dbHitFormatter;
+				col.headerFilterPlaceholder = "match…";
+			}
+			return col;
+		});
+	}
+
+	fetch(API + "/columns")
+		.then(function (r) { return r.json(); })
+		.then(function (meta) {
+			if (meta.error) throw new Error(meta.error);
+			dbLabels = meta.db_labels || {};
+
+			table = new Tabulator("#data-table", {
+				height: "72vh",
+				layout: "fitColumns",
+				placeholder: "No data",
+				columns: buildColumns(meta.columns, meta.db_cols || []),
+				movableColumns: true,
+				headerSortTriState: true,
+				pagination: true,
+				paginationSize: 50,
+				paginationSizeSelector: [25, 50, 100, 250, 500],
+				ajaxURL: API,
+				paginationMode: "remote",
+				sortMode: "remote",
+				filterMode: "remote",
+				ajaxURLGenerator: function (url, config, params) {
+					const qs = currentFilterParams();
+					qs.set("page", params.page || 1);
+					qs.set("size", params.size || 50);
+					(params.sort || []).forEach(function (s, i) {
+						qs.append("sorters[" + i + "][field]", s.field);
+						qs.append("sorters[" + i + "][dir]", s.dir);
+					});
+					return url + "?" + qs.toString();
+				},
+				ajaxResponse: function (url, params, response) {
+					loader.textContent = "";
+					return response;
+				},
+			});
+
+			table.on("dataLoaded", refreshStats);
+			refreshStats();
+		})
+		.catch(function (err) {
+			loader.textContent = "Failed: " + err.message;
+		});
+
+	document.getElementById("btnIncidentsOnly").addEventListener("click", function () {
+		incidentsOnly = !incidentsOnly;
+		this.classList.toggle("btn-warning", incidentsOnly === false);
+		this.classList.toggle("btn-danger", incidentsOnly === true);
+		this.textContent = incidentsOnly
+			? "⚠️ Showing only 10-Ks with ≥1 incident — click to show all"
+			: "⚠️ Only 10-Ks with ≥1 incident (6 DBs)";
+		if (table) table.setPage(1);
+	});
+
+	document.getElementById("btnClearFilters").addEventListener("click", function () {
+		if (table) table.clearHeaderFilter();
+	});
+
+	document.getElementById("btnDownload").addEventListener("click", function () {
+		if (!table) return;
+		loader.textContent = "Preparing CSV…";
+		const params = currentFilterParams();
+		params.set("paginate", "false");
+		table.getSorters().forEach(function (s, i) {
+			params.append("sorters[" + i + "][field]", s.field);
+			params.append("sorters[" + i + "][dir]", s.dir);
+		});
+		fetch(API + "?" + params.toString())
+			.then(function (r) { return r.json(); })
+			.then(function (rows) {
+				loader.textContent = "";
+				if (!rows.length) { loader.textContent = "Nothing to export."; return; }
+				const cols = Object.keys(rows[0]);
+				const lines = [cols.join(",")];
+				rows.forEach(function (row) {
+					lines.push(cols.map(function (c) {
+						const v = row[c] == null ? "" : String(row[c]);
+						return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+					}).join(","));
+				});
+				const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+				const a = document.createElement("a");
+				a.href = URL.createObjectURL(blob);
+				a.download = "swdb_10k_6dbs_filtered.csv";
+				a.click();
+				URL.revokeObjectURL(a.href);
+			})
+			.catch(function (err) { loader.textContent = "Export failed: " + err.message; });
+	});
+});
+</script>
+{% endblock %}

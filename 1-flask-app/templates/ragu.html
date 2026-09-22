@@ -1,0 +1,277 @@
+{% extends "base.html" %}
+
+{% block title %}{{ dataset_label }}{% endblock %}
+
+{% block extra_head %}
+<style>
+	.stat-cards { display: flex; flex-wrap: wrap; gap: .75rem; margin-bottom: 1rem; }
+	.stat-card {
+		background: #fff; border: 1px solid #e0e0e0; border-radius: 6px;
+		padding: .55rem 1rem; min-width: 150px; text-align: center;
+	}
+	.stat-card .stat-value { font-size: 1.3rem; font-weight: 700; color: #333; }
+	.stat-card .stat-label {
+		font-size: .7rem; color: #888;
+		text-transform: uppercase; letter-spacing: .3px;
+	}
+	.toolbar {
+		display: flex; flex-wrap: wrap; gap: .5rem;
+		align-items: center; margin-bottom: .6rem;
+	}
+	.toolbar .btn-sm { font-size: .78rem; }
+	.col-toggle-panel {
+		max-height: 220px; overflow-y: auto;
+		border: 1px solid #e0e0e0; border-radius: 6px;
+		padding: .6rem .8rem; background: #fff;
+		margin-bottom: .75rem; display: none;
+	}
+	.col-toggle-panel.show { display: block; }
+	.col-toggle-panel label {
+		display: inline-flex; align-items: center; gap: .3rem;
+		font-size: .78rem; margin: .15rem .9rem .15rem 0;
+	}
+	.tabulator { font-size: .8rem; }
+	.tabulator .tabulator-cell { white-space: normal; }
+	.hint { font-size: .75rem; color: #888; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+	<h4 class="mb-1">{{ dataset_label }}</h4>
+	<p class="hint mb-3">
+		Sentence-level cyber-security predictions extracted from full 10-K filings.
+		Numeric columns (CIK, Year, unique_text_id) accept <code>&gt;</code>,
+		<code>&lt;</code>, <code>&gt;=</code>, <code>&lt;=</code>, <code>=</code>
+		prefixes in the header filter (e.g. <code>&gt;2020</code>).
+	</p>
+
+	<div class="stat-cards" id="datasetStatCards"></div>
+
+	<div class="toolbar">
+		<button class="btn btn-outline-secondary btn-sm" id="btnToggleCols">Show/Hide Columns</button>
+		<button class="btn btn-outline-secondary btn-sm" id="btnClearFilters">Clear Filters</button>
+		<button class="btn btn-primary btn-sm" id="btnDownload">Download CSV (filtered)</button>
+		<span class="text-muted small ms-auto" id="loader"></span>
+	</div>
+
+	<div class="col-toggle-panel" id="colTogglePanel"></div>
+
+	<div id="previewBanner" class="alert alert-info py-2 px-3 small mb-2" style="display:none;"></div>
+
+	<div id="data-table"></div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+	const API = "/api/ragu";
+	const NUMERIC = new Set(["CIK", "Year", "unique_text_id"]);
+	const WIDE = new Set(["Sentence"]);
+
+	const loader = document.getElementById("loader");
+	const banner = document.getElementById("previewBanner");
+	loader.textContent = "Loading…";
+
+	let table = null;
+	let previewLimit = 5000;
+	let totalAll = 0;
+
+	// Header filters are sent to the server as-is; a leading comparison
+	// operator on a numeric column is split out into the filter type.
+	function currentFilterParams() {
+		const params = new URLSearchParams();
+		if (!table) return params;
+		let i = 0;
+		table.getHeaderFilters().forEach(function (f) {
+			let value = f.value;
+			if (value === "" || value == null) return;
+			let type = "like";
+			if (NUMERIC.has(f.field)) {
+				const m = String(value).trim().match(/^(>=|<=|!=|>|<|=)\s*(.+)$/);
+				if (m) { type = m[1]; value = m[2]; }
+				else { type = "="; }
+			}
+			params.append("filters[" + i + "][field]", f.field);
+			params.append("filters[" + i + "][type]", type);
+			params.append("filters[" + i + "][value]", value);
+			i += 1;
+		});
+		return params;
+	}
+
+	function renderStats(stats) {
+		const host = document.getElementById("datasetStatCards");
+		host.innerHTML = "";
+		(stats || []).forEach(function (s) {
+			const card = document.createElement("div");
+			card.className = "stat-card";
+			const val = (s.value != null ? s.value.toLocaleString() : "-") + (s.suffix || "");
+			card.innerHTML =
+				'<div class="stat-value">' + val + '</div>' +
+				'<div class="stat-label">' + s.label + '</div>';
+			host.appendChild(card);
+		});
+	}
+
+	function refreshStats() {
+		const qs = currentFilterParams().toString();
+		fetch(API + "/stats" + (qs ? "?" + qs : ""))
+			.then(function (r) { return r.json(); })
+			.then(function (resp) { renderStats(resp.stats); })
+			.catch(function () { /* non-fatal */ });
+	}
+
+	function updateBanner(isPreview, fullTotal) {
+		if (isPreview) {
+			banner.style.display = "";
+			banner.textContent =
+				"Showing the first " + previewLimit.toLocaleString() +
+				" of " + (fullTotal || totalAll).toLocaleString() +
+				" rows. Apply a filter or sort to query the full dataset.";
+		} else {
+			banner.style.display = "none";
+		}
+	}
+
+	function buildColumns(cols) {
+		return cols.map(function (name) {
+			const col = {
+				title: name,
+				field: name,
+				headerSort: true,
+				headerFilter: "input",
+				headerFilterLiveFilter: false,
+				resizable: true,
+				minWidth: 90,
+			};
+			if (NUMERIC.has(name)) {
+				col.hozAlign = "right";
+				col.width = 110;
+				col.headerFilterPlaceholder = "e.g. >2020";
+			}
+			if (WIDE.has(name)) {
+				col.widthGrow = 6;
+				col.formatter = "textarea";
+			}
+			return col;
+		});
+	}
+
+	function setupColToggle(columns) {
+		const panel = document.getElementById("colTogglePanel");
+		panel.innerHTML = "";
+		columns.forEach(function (c) {
+			const wrap = document.createElement("label");
+			wrap.innerHTML = '<input type="checkbox" checked> ' + c.field;
+			panel.appendChild(wrap);
+			wrap.querySelector("input").addEventListener("change", function (e) {
+				if (!table) return;
+				if (e.target.checked) table.showColumn(c.field);
+				else table.hideColumn(c.field);
+			});
+		});
+	}
+
+	fetch(API + "/columns")
+		.then(function (r) { return r.json(); })
+		.then(function (meta) {
+			if (meta.error) throw new Error(meta.error);
+			totalAll = meta.total;
+			if (meta.preview_limit) previewLimit = meta.preview_limit;
+
+			const columns = buildColumns(meta.columns);
+
+			table = new Tabulator("#data-table", {
+				height: "70vh",
+				layout: "fitColumns",
+				placeholder: "No data",
+				columns: columns,
+				movableColumns: true,
+				headerSortTriState: true,
+				pagination: true,
+				paginationSize: 50,
+				paginationSizeSelector: [25, 50, 100, 250, 500],
+				ajaxURL: API,
+				paginationMode: "remote",
+				sortMode: "remote",
+				filterMode: "remote",
+				ajaxURLGenerator: function (url, config, params) {
+					const qs = currentFilterParams();
+					qs.set("page", params.page || 1);
+					qs.set("size", params.size || 50);
+					(params.sort || []).forEach(function (s, i) {
+						qs.append("sorters[" + i + "][field]", s.field);
+						qs.append("sorters[" + i + "][dir]", s.dir);
+					});
+					return url + "?" + qs.toString();
+				},
+				ajaxResponse: function (url, params, response) {
+					updateBanner(!!response.preview, response.full_total);
+					loader.textContent = "";
+					return response;
+				},
+			});
+
+			setupColToggle(columns);
+			table.on("dataLoaded", refreshStats);
+			refreshStats();
+		})
+		.catch(function (err) {
+			loader.textContent = "Failed: " + err.message;
+		});
+
+	document.getElementById("btnToggleCols").addEventListener("click", function () {
+		document.getElementById("colTogglePanel").classList.toggle("show");
+	});
+
+	document.getElementById("btnClearFilters").addEventListener("click", function () {
+		if (!table) return;
+		table.clearHeaderFilter();
+	});
+
+	document.getElementById("btnDownload").addEventListener("click", function () {
+		if (!table) return;
+		loader.textContent = "Preparing CSV…";
+		const params = currentFilterParams();
+		params.set("paginate", "false");
+		table.getSorters().forEach(function (s, i) {
+			params.append("sorters[" + i + "][field]", s.field);
+			params.append("sorters[" + i + "][dir]", s.dir);
+		});
+		fetch(API + "?" + params.toString())
+			.then(function (r) { return r.json(); })
+			.then(function (rows) {
+				loader.textContent = "";
+				downloadJsonAsCsv(rows, "nlp_10k_predictions_filtered.csv");
+			})
+			.catch(function (err) { loader.textContent = "Export failed: " + err.message; });
+	});
+
+	function downloadJsonAsCsv(rows, filename) {
+		if (!rows || !rows.length) { alert("No rows to export."); return; }
+		const cols = Object.keys(rows[0]);
+		const esc = function (v) {
+			if (v == null) return "";
+			const s = String(v);
+			if (s.indexOf(",") >= 0 || s.indexOf('"') >= 0 || s.indexOf("\n") >= 0) {
+				return '"' + s.replace(/"/g, '""') + '"';
+			}
+			return s;
+		};
+		const lines = [cols.join(",")];
+		rows.forEach(function (r) {
+			lines.push(cols.map(function (c) { return esc(r[c]); }).join(","));
+		});
+		const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement("a");
+		a.href = url; a.download = filename;
+		document.body.appendChild(a); a.click();
+		setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 100);
+	}
+});
+</script>
+{% endblock %}

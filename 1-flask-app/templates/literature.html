@@ -1,0 +1,275 @@
+{% extends "base.html" %}
+
+{% block title %}Literature{% endblock %}
+
+{% block extra_head %}
+<style>
+	:root {
+		--lit-ink: #22272e;
+		--lit-muted: #6b7280;
+		--lit-line: #e4e6ea;
+		--lit-accent: #33566e;
+	}
+
+	.lit-page { max-width: 1000px; margin: 0 auto; color: var(--lit-ink); }
+
+	.lit-toolbar {
+		display: flex; flex-wrap: wrap; gap: .5rem; align-items: center;
+		border-bottom: 1px solid var(--lit-line);
+		padding-bottom: .9rem; margin-bottom: .75rem;
+	}
+	.lit-toolbar .form-control, .lit-toolbar .form-select {
+		font-size: .84rem; width: auto; max-width: 190px;
+	}
+	.lit-toolbar #searchInput { flex: 1 1 220px; }
+	.toolbar-links { margin-left: auto; display: flex; gap: .9rem; }
+	.toolbar-links a, .btn-reset {
+		font-size: .8rem; color: var(--lit-accent); background: none;
+		border: 0; padding: 0; text-decoration: none;
+	}
+	.toolbar-links a:hover, .btn-reset:hover { text-decoration: underline; }
+
+	.list-count { font-size: .8rem; color: var(--lit-muted); margin-bottom: .35rem; }
+
+	.ref-list { border-top: 1px solid var(--lit-line); }
+	.ref { border-bottom: 1px solid var(--lit-line); padding: 1.15rem .25rem 1.05rem; }
+	.ref-head { display: flex; gap: 1rem; align-items: baseline; }
+	.ref-title {
+		flex: 1 1 auto; font-size: 1.02rem; font-weight: 600; line-height: 1.4;
+		color: var(--lit-ink); text-decoration: none;
+	}
+	.ref-title:hover { color: var(--lit-accent); text-decoration: underline; }
+	.ref-year { flex: 0 0 auto; font-size: .82rem; color: var(--lit-muted); font-variant-numeric: tabular-nums; }
+	.ref-authors { font-size: .85rem; color: #4b5563; margin-top: .3rem; }
+	.ref-source { font-size: .8rem; color: var(--lit-muted); margin-top: .2rem; }
+	.chip {
+		display: inline-block; font-size: .68rem; letter-spacing: .06em;
+		text-transform: uppercase; color: var(--lit-accent);
+		border: 1px solid #d5dde3; border-radius: 3px;
+		padding: .05rem .35rem; margin-right: .45rem;
+	}
+	.ref-tags { margin-top: .5rem; }
+	.tag {
+		display: inline-block; font-size: .74rem; color: #55606d;
+		background: #f1f3f5; border-radius: 3px;
+		padding: .08rem .42rem; margin: 0 .3rem .3rem 0;
+	}
+	.ref-abstract {
+		display: none; font-size: .85rem; line-height: 1.55; color: #4b5563;
+		border-left: 2px solid var(--lit-line); padding-left: .85rem;
+		margin: .7rem 0 .2rem;
+	}
+	.ref-abstract.open { display: block; }
+
+	.ref-foot {
+		display: flex; flex-wrap: wrap; align-items: center;
+		gap: .4rem .75rem; margin-top: .75rem;
+	}
+	.btn-zotero {
+		display: inline-flex; align-items: center; gap: .35rem;
+		font-size: .8rem; color: #fff; background: var(--lit-accent);
+		border: 1px solid var(--lit-accent); border-radius: 4px;
+		padding: .22rem .6rem; text-decoration: none;
+	}
+	.btn-zotero:hover { background: #294758; color: #fff; }
+	.ref-link, .btn-abstract {
+		font-size: .8rem; color: var(--lit-accent); background: none;
+		border: 0; padding: 0; text-decoration: none;
+	}
+	.ref-link:hover, .btn-abstract:hover { text-decoration: underline; }
+	.ref-badges { font-size: .76rem; color: var(--lit-muted); margin-left: auto; }
+
+	.empty-state {
+		border: 1px dashed var(--lit-line); border-radius: 6px;
+		padding: 2.5rem; text-align: center; color: var(--lit-muted); font-size: .88rem;
+	}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="lit-page">
+	<div class="lit-toolbar">
+		<input type="search" id="searchInput" class="form-control form-control-sm"
+			placeholder="Search references…" />
+		{% for filter in filters %}
+		<select class="form-select form-select-sm lit-filter" data-filter="{{ filter.key }}">
+			<option value="">{{ filter.label }}</option>
+			{% for option in filter.options %}
+			<option value="{{ option.value }}">{{ option.value }} ({{ option.count }})</option>
+			{% endfor %}
+		</select>
+		{% endfor %}
+		<select id="sortSelect" class="form-select form-select-sm">
+			<option value="year_desc">Newest first</option>
+			<option value="year_asc">Oldest first</option>
+			<option value="title_asc">Title A–Z</option>
+			<option value="added_desc">Recently added</option>
+		</select>
+		<button type="button" class="btn-reset" id="btnReset">Reset</button>
+		<span class="toolbar-links">
+			<a href="{{ group_url }}" target="_blank" rel="noopener">Zotero group</a>
+			<a href="{{ url_for('literature', refresh=1) }}">Refresh</a>
+		</span>
+	</div>
+
+	<div class="list-count">
+		<strong id="visibleCount">{{ records|length }}</strong> of {{ records|length }} references
+	</div>
+
+	<div class="ref-list" id="refList">
+		{% for record in records %}
+		<article class="ref"
+			data-year="{{ record.year }}"
+			data-type="{{ record.item_type_label }}"
+			data-tags="{{ record.tags|join('|') }}"
+			data-title="{{ record.title|lower }}"
+			data-added="{{ record.date_added }}"
+			data-search="{{ (record.title ~ ' ' ~ record.authors ~ ' ' ~ record.venue ~ ' ' ~ record.abstract ~ ' ' ~ record.tags|join(' '))|lower }}">
+			<div class="ref-head">
+				<a class="ref-title" href="{{ record.url or record.zotero_url }}" target="_blank" rel="noopener">{{ record.title }}</a>
+				<span class="ref-year">{{ record.year or "n.d." }}</span>
+			</div>
+			{% if record.authors %}
+			<div class="ref-authors">{{ record.authors }}</div>
+			{% endif %}
+			<div class="ref-source">
+				<span class="chip">{{ record.item_type_label }}</span>
+				{% if record.venue %}{{ record.venue }}{% endif %}
+				{% if record.date %} · {{ record.date }}{% endif %}
+			</div>
+			{% if record.tags %}
+			<div class="ref-tags">
+				{% for tag in record.tags %}
+				<span class="tag">{{ tag }}</span>
+				{% endfor %}
+			</div>
+			{% endif %}
+			{% if record.abstract %}
+			<p class="ref-abstract">{{ record.abstract }}</p>
+			{% endif %}
+			<div class="ref-foot">
+				<a class="btn-zotero" href="{{ record.zotero_url }}" target="_blank" rel="noopener"
+					title="{% if record.has_pdf %}Open the annotated PDF in the Zotero web reader{% else %}Open this item in the Zotero web library{% endif %}">
+					{% if record.has_pdf %}Read in Zotero{% else %}Open in Zotero{% endif %}
+				</a>
+				{% if record.abstract %}
+				<button type="button" class="btn-abstract">Abstract</button>
+				{% endif %}
+				{% if record.doi %}
+				<a class="ref-link" href="https://doi.org/{{ record.doi }}" target="_blank" rel="noopener">DOI</a>
+				{% endif %}
+				{% if record.url %}
+				<a class="ref-link" href="{{ record.url }}" target="_blank" rel="noopener">Full text</a>
+				{% endif %}
+				{% if record.badges %}
+				<span class="ref-badges">{{ record.badges }}</span>
+				{% endif %}
+			</div>
+		</article>
+		{% endfor %}
+	</div>
+
+	<div class="empty-state" id="emptyState" style="display:none;">
+		No references match the current filters.
+	</div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+	const list = document.getElementById("refList");
+	const entries = Array.from(list.querySelectorAll(".ref"));
+	const searchInput = document.getElementById("searchInput");
+	const sortSelect = document.getElementById("sortSelect");
+	const filterSelects = Array.from(document.querySelectorAll(".lit-filter"));
+
+	function selectedValue(filterKey) {
+		const select = filterSelects.find(function (element) {
+			return element.dataset.filter === filterKey;
+		});
+		return select ? select.value : "";
+	}
+
+	function matchesFilters(entry) {
+		const query = searchInput.value.trim().toLowerCase();
+		if (query && entry.dataset.search.indexOf(query) === -1) {
+			return false;
+		}
+		const type = selectedValue("type");
+		if (type && entry.dataset.type !== type) {
+			return false;
+		}
+		const year = selectedValue("year");
+		if (year && entry.dataset.year !== year) {
+			return false;
+		}
+		const tag = selectedValue("tag");
+		if (tag && entry.dataset.tags.split("|").indexOf(tag) === -1) {
+			return false;
+		}
+		return true;
+	}
+
+	function applyFilters() {
+		let visible = 0;
+		entries.forEach(function (entry) {
+			const show = matchesFilters(entry);
+			entry.style.display = show ? "block" : "none";
+			if (show) {
+				visible++;
+			}
+		});
+		document.getElementById("visibleCount").textContent = visible;
+		document.getElementById("emptyState").style.display = visible ? "none" : "block";
+		list.style.display = visible ? "block" : "none";
+	}
+
+	function compareEntries(a, b) {
+		const mode = sortSelect.value;
+		if (mode === "year_asc") {
+			return a.dataset.year.localeCompare(b.dataset.year);
+		}
+		if (mode === "title_asc") {
+			return a.dataset.title.localeCompare(b.dataset.title);
+		}
+		if (mode === "added_desc") {
+			return b.dataset.added.localeCompare(a.dataset.added);
+		}
+		return b.dataset.year.localeCompare(a.dataset.year);
+	}
+
+	function applySort() {
+		entries.slice().sort(compareEntries).forEach(function (entry) {
+			list.appendChild(entry);
+		});
+	}
+
+	function resetFilters() {
+		searchInput.value = "";
+		filterSelects.forEach(function (select) {
+			select.value = "";
+		});
+		applyFilters();
+	}
+
+	function toggleAbstract(event) {
+		const button = event.target.closest(".btn-abstract");
+		if (!button) {
+			return;
+		}
+		button.closest(".ref").querySelector(".ref-abstract").classList.toggle("open");
+	}
+
+	searchInput.addEventListener("input", applyFilters);
+	sortSelect.addEventListener("change", applySort);
+	filterSelects.forEach(function (select) {
+		select.addEventListener("change", applyFilters);
+	});
+	document.getElementById("btnReset").addEventListener("click", resetFilters);
+	list.addEventListener("click", toggleAbstract);
+
+	applyFilters();
+});
+</script>
+{% endblock %}

@@ -52,6 +52,36 @@
 								{% endfor %}
 							</ul>
 						</li>
+						<li class="nav-item">
+							<a class="nav-link {% if request.endpoint == 'ragu' %}active{% endif %}" href="{{ url_for('ragu') }}">NLP 10-K Classification</a>
+						</li>
+						<li class="nav-item">
+							<a class="nav-link {% if request.endpoint == 'maryam' %}active{% endif %}" href="{{ url_for('maryam') }}">10-K ↔ Spiceworks</a>
+						</li>
+						<li class="nav-item">
+							<a class="nav-link {% if request.endpoint == 'maryam6' %}active{% endif %}" href="{{ url_for('maryam6') }}">6 Incident DBs</a>
+						</li>
+						<li class="nav-item">
+							<a class="nav-link {% if request.endpoint == 'nolan' %}active{% endif %}" href="{{ url_for('nolan') }}">Nolan</a>
+						</li>
+						<li class="nav-item dropdown">
+							<a class="nav-link dropdown-toggle {% if request.endpoint == 'raghavendra' %}active{% endif %}"
+								href="#" id="raghavendraDropdown" role="button"
+								data-bs-toggle="dropdown" aria-expanded="false">
+								Raghavendra
+							</a>
+							<ul class="dropdown-menu" aria-labelledby="raghavendraDropdown">
+								{% for d in raghavendra_datasets %}
+								<li>
+									<a class="dropdown-item {% if request.endpoint == 'raghavendra' and request.view_args.key == d.key %}active{% endif %}"
+										href="{{ url_for('raghavendra', key=d.key) }}">{{ d.label }}</a>
+								</li>
+								{% endfor %}
+							</ul>
+						</li>
+						<li class="nav-item">
+							<a class="nav-link {% if request.endpoint == 'literature' %}active{% endif %}" href="{{ url_for('literature') }}">Literature</a>
+						</li>
 					</ul>
 				</div>
 			</div>

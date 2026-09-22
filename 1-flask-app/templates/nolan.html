@@ -1,0 +1,599 @@
+{% extends "base.html" %}
+
+{% block title %}{{ dataset_label }}{% endblock %}
+
+{% block extra_head %}
+<style>
+	.stat-cards { display: flex; flex-wrap: wrap; gap: .75rem; margin-bottom: 1rem; }
+	.stat-card {
+		background: #fff; border: 1px solid #e0e0e0; border-radius: 6px;
+		padding: .55rem 1rem; min-width: 150px; text-align: center;
+	}
+	.stat-card .stat-value { font-size: 1.3rem; font-weight: 700; color: #333; }
+	.stat-card .stat-label {
+		font-size: .7rem; color: #888;
+		text-transform: uppercase; letter-spacing: .3px;
+	}
+	.toolbar {
+		display: flex; flex-wrap: wrap; gap: .5rem;
+		align-items: center; margin-bottom: .6rem;
+	}
+	.toolbar .btn-sm { font-size: .78rem; }
+	.tabulator { font-size: .8rem; }
+	.tabulator .tabulator-cell { white-space: normal; }
+	.tabulator-row.tabulator-selectable:hover { cursor: pointer; }
+	.hint { font-size: .75rem; color: #888; }
+	.sentence-panel {
+		background: #fff; border: 1px solid #e0e0e0; border-radius: 6px;
+		padding: .9rem 1rem; margin-top: 1rem;
+	}
+	.sentence-list {
+		max-height: 55vh; overflow-y: auto; margin-top: .7rem;
+		border-top: 1px solid #eee;
+	}
+	.sentence-item {
+		display: flex; gap: .7rem; padding: .45rem .2rem;
+		border-bottom: 1px solid #f2f2f2; font-size: .82rem;
+	}
+	.sentence-item .idx {
+		color: #aaa; font-variant-numeric: tabular-nums;
+		min-width: 3.5rem; text-align: right; flex: none;
+	}
+	.sentence-item mark { padding: 0 .1rem; }
+	.sentence-nav { display: flex; gap: .4rem; align-items: center; margin-top: .6rem; }
+	/* "Document" reading mode: sentences re-flowed into prose paragraphs */
+	.sentence-list.reader-mode { border-top: 1px solid #eee; }
+	.reader-doc {
+		max-width: 860px; margin: 0 auto; padding: 1.2rem .8rem 1.6rem;
+		font-family: Georgia, "Times New Roman", serif;
+		font-size: .95rem; line-height: 1.75; color: #2b2b2b;
+	}
+	.reader-doc p { margin-bottom: .9rem; text-align: justify; }
+	.reader-doc h6 {
+		font-family: inherit; font-weight: 700; font-size: 1rem;
+		margin: 1.4rem 0 .6rem; color: #1a1a1a;
+	}
+	.reader-doc mark { padding: 0 .1rem; }
+	.reader-doc .sent { border-radius: 2px; }
+	.reader-doc .sent:hover { background: #eef4ff; cursor: default; }
+	/* Item section separation */
+	.item-divider {
+		margin: 1.8rem 0 1rem; padding: .55rem .9rem;
+		background: #eef1f5; border-left: 5px solid #8a94a3; border-radius: 4px;
+		font-family: var(--bs-body-font-family, sans-serif);
+		font-size: .82rem; font-weight: 700; letter-spacing: .6px;
+		text-transform: uppercase; color: #4a5361;
+	}
+	.item-divider:first-child { margin-top: .4rem; }
+	.item-divider.cyber {
+		background: #fff4d6; border-left-color: #e0a800; color: #7a5c00;
+	}
+	.item-divider .cyber-badge {
+		float: right; font-size: .68rem; font-weight: 600;
+		background: #e0a800; color: #fff; border-radius: 10px;
+		padding: .1rem .55rem; letter-spacing: .4px;
+	}
+	.item-section.cyber {
+		background: #fffcf2; border-left: 3px solid #f2c744;
+		padding: .2rem .6rem .2rem .9rem; border-radius: 0 4px 4px 0;
+	}
+	.sentence-list .item-divider { margin: 1rem .2rem .5rem; }
+	.sentence-item.cyber { background: #fffcf2; }
+	.item-chip-bar {
+		display: flex; flex-wrap: wrap; gap: .35rem;
+		align-items: center; margin-top: .6rem;
+	}
+	.item-chip-bar .btn { font-size: .74rem; padding: .15rem .6rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+	<h4 class="mb-1">{{ dataset_label }}</h4>
+	<p class="hint mb-3">
+		Sentence-tokenised full text of 10-K filings (<code>full_10k_sentences.jsonl</code>,
+		~1.7&nbsp;GB). The table below is a filing-level index; the raw sentences are read
+		from disk on demand. Click a row to open its sentences.
+		Numeric columns (<code>cik</code>, <code>filing_date</code>, <code>sentences</code>,
+		<code>characters</code>) accept <code>&gt;</code>, <code>&lt;</code>,
+		<code>&gt;=</code>, <code>&lt;=</code>, <code>=</code> prefixes in the header filter.
+	</p>
+
+	<div class="stat-cards" id="datasetStatCards"></div>
+
+	<div class="toolbar">
+		<button class="btn btn-outline-secondary btn-sm" id="btnClearFilters">Clear Filters</button>
+		<button class="btn btn-primary btn-sm" id="btnDownload">Download CSV (filtered)</button>
+		<span class="text-muted small ms-auto" id="loader"></span>
+	</div>
+
+	<div id="data-table"></div>
+
+	<div class="sentence-panel" id="sentencePanel" style="display:none;">
+		<div class="d-flex flex-wrap align-items-center gap-2">
+			<strong id="sentenceTitle" class="me-2"></strong>
+			<span class="hint" id="sentenceMeta"></span>
+			<div class="ms-auto d-flex gap-2">
+				<a class="btn btn-success btn-sm" id="btnOpenReader" href="#" target="_blank">📖 Open reader</a>
+				<div class="btn-group btn-group-sm" role="group" aria-label="View mode">
+					<button type="button" class="btn btn-outline-secondary" id="btnViewSentences">Sentences</button>
+					<button type="button" class="btn btn-outline-secondary active" id="btnViewDocument">Document</button>
+				</div>
+				<input type="search" class="form-control form-control-sm" id="sentenceSearch"
+					placeholder="Search in this filing…" style="width: 240px;" />
+				<button class="btn btn-outline-secondary btn-sm" id="btnCloseSentences">Close</button>
+			</div>
+		</div>
+		<div class="item-chip-bar">
+			<span class="hint me-1">Sections:</span>
+			<button type="button" class="btn btn-outline-secondary active" data-item="">All</button>
+			<button type="button" class="btn btn-outline-warning" data-item="1A">Item 1A · Risk Factors</button>
+			<button type="button" class="btn btn-outline-warning" data-item="7">Item 7 · MD&amp;A</button>
+			<button type="button" class="btn btn-outline-warning" data-item="8">Item 8 · Financial Statements</button>
+			<button type="button" class="btn btn-outline-warning" data-item="9A">Item 9A · Controls &amp; Procedures</button>
+			<button type="button" class="btn btn-warning" id="btnCyberItems">⚡ Cyber items only (1A + 7 + 8 + 9A)</button>
+		</div>
+		<div class="sentence-list" id="sentenceList"></div>
+		<div class="sentence-nav">
+			<button class="btn btn-outline-secondary btn-sm" id="btnPrevPage">Previous</button>
+			<span class="hint" id="sentencePageInfo"></span>
+			<button class="btn btn-outline-secondary btn-sm" id="btnNextPage">Next</button>
+		</div>
+	</div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+	const API = "/api/nolan";
+	const NUMERIC = new Set(["row", "cik", "filing_date", "sentences", "characters", "year"]);
+
+	const loader = document.getElementById("loader");
+	loader.textContent = "Loading…";
+
+	let table = null;
+	let sentencePageSize = 200;
+	let currentRow = null;
+	let currentPage = 1;
+	let lastPage = 1;
+	let searchTimer = null;
+	let viewMode = "document";   // "document" | "sentences"
+	let lastResponse = null;     // cached page so toggling re-renders instantly
+	let itemFilter = new Set();  // empty = all sections
+
+	// Potentially cyber-relevant 10-K items.
+	const CYBER_ITEMS = ["1A", "7", "8", "9A"];
+	const ITEM_TITLES = {
+		"1A": "Risk Factors",
+		"7": "Management\u2019s Discussion & Analysis",
+		"8": "Financial Statements and Supplementary Data",
+		"9A": "Controls and Procedures",
+	};
+
+	function itemLabel(item) {
+		if (!item) return "Preamble / Cover";
+		const title = ITEM_TITLES[item];
+		return "Item " + item + (title ? " \u2014 " + title : "");
+	}
+
+	function isCyberItem(item) {
+		return CYBER_ITEMS.indexOf(item) >= 0;
+	}
+
+	function makeDivider(item) {
+		const div = document.createElement("div");
+		div.className = "item-divider" + (isCyberItem(item) ? " cyber" : "");
+		div.textContent = itemLabel(item);
+		if (isCyberItem(item)) {
+			const badge = document.createElement("span");
+			badge.className = "cyber-badge";
+			badge.textContent = "\u26a1 cyber";
+			div.appendChild(badge);
+		}
+		return div;
+	}
+
+	function currentFilterParams() {
+		const params = new URLSearchParams();
+		if (!table) return params;
+		let i = 0;
+		table.getHeaderFilters().forEach(function (f) {
+			let value = f.value;
+			if (value === "" || value == null) return;
+			let type = "like";
+			if (NUMERIC.has(f.field)) {
+				const m = String(value).trim().match(/^(>=|<=|!=|>|<|=)\s*(.+)$/);
+				if (m) { type = m[1]; value = m[2]; }
+				else { type = "like"; }
+			}
+			params.append("filters[" + i + "][field]", f.field);
+			params.append("filters[" + i + "][type]", type);
+			params.append("filters[" + i + "][value]", value);
+			i += 1;
+		});
+		return params;
+	}
+
+	function renderStats(stats) {
+		const host = document.getElementById("datasetStatCards");
+		host.innerHTML = "";
+		(stats || []).forEach(function (s) {
+			const card = document.createElement("div");
+			card.className = "stat-card";
+			const val = (s.value != null ? s.value.toLocaleString() : "-") + (s.suffix || "");
+			card.innerHTML =
+				'<div class="stat-value">' + val + '</div>' +
+				'<div class="stat-label">' + s.label + '</div>';
+			host.appendChild(card);
+		});
+	}
+
+	function refreshStats() {
+		const qs = currentFilterParams().toString();
+		fetch(API + "/stats" + (qs ? "?" + qs : ""))
+			.then(function (r) { return r.json(); })
+			.then(function (resp) { renderStats(resp.stats); })
+			.catch(function () { /* non-fatal */ });
+	}
+
+	function intFormatter(cell) {
+		const v = cell.getValue();
+		if (v == null || v === "") return "";
+		const n = Number(v);
+		return isNaN(n) ? v : n.toLocaleString();
+	}
+
+	function buildColumns(cols) {
+		const readerCol = {
+			title: "",
+			field: "__reader",
+			headerSort: false,
+			width: 78,
+			hozAlign: "center",
+			formatter: function (cell) {
+				const r = cell.getRow().getData().row;
+				return '<a class="btn btn-sm btn-outline-success py-0" href="/nolan/reader/' + r +
+					'" target="_blank" title="Open the friendly reader" ' +
+					'onclick="event.stopPropagation()">📖 Read</a>';
+			},
+		};
+		return [readerCol].concat(cols.map(function (name) {
+			const col = {
+				title: name,
+				field: name,
+				headerSort: true,
+				headerFilter: "input",
+				headerFilterLiveFilter: false,
+				resizable: true,
+				minWidth: 90,
+			};
+			if (name === "sentences" || name === "characters") {
+				col.hozAlign = "right";
+				col.formatter = intFormatter;
+				col.headerFilterPlaceholder = "e.g. >1000";
+			}
+			if (name === "row") col.width = 80;
+			if (name === "adsh") col.widthGrow = 2;
+			return col;
+		}));
+	}
+
+	function escapeHtml(s) {
+		return String(s)
+			.replace(/&/g, "&amp;").replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+	}
+
+	function highlight(text, query) {
+		const safe = escapeHtml(text);
+		if (!query) return safe;
+		const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+		return safe.replace(new RegExp(escaped, "gi"), function (m) {
+			return "<mark>" + m + "</mark>";
+		});
+	}
+
+	// A sentence is treated as a heading when it is short and looks like a
+	// section title (e.g. "ITEM 1A.", "PART II", "RISK FACTORS", "Item 7.").
+	function isHeading(text) {
+		const t = text.trim();
+		if (!t || t.length > 90) return false;
+		if (/^(PART|ITEM|Item)\s+[0-9IVXLC]+[A-B]?\b/.test(t)) return true;
+		const letters = t.replace(/[^A-Za-z]/g, "");
+		if (letters.length >= 6 && letters === letters.toUpperCase()) return true;
+		return false;
+	}
+
+	// A new paragraph starts after a heading, or when the previous sentence
+	// index is not contiguous (search mode), or every ~8 sentences as a
+	// readability fallback for very long runs. Each 10-K item gets its own
+	// visually separated section.
+	function renderDocument(list, items, query) {
+		list.classList.add("reader-mode");
+		const doc = document.createElement("div");
+		doc.className = "reader-doc";
+		let section = null;
+		let currentItem;
+		let para = null;
+		let run = 0;
+		let prevN = null;
+		items.forEach(function (item) {
+			if (section === null || item.item !== currentItem) {
+				currentItem = item.item;
+				doc.appendChild(makeDivider(currentItem));
+				section = document.createElement("section");
+				section.className = "item-section" + (isCyberItem(currentItem) ? " cyber" : "");
+				doc.appendChild(section);
+				para = null;
+				run = 0;
+			}
+			const gap = prevN != null && item.n !== prevN + 1;
+			prevN = item.n;
+			if (isHeading(item.sentence)) {
+				const h = document.createElement("h6");
+				h.innerHTML = highlight(item.sentence, query);
+				h.title = "Sentence " + item.n.toLocaleString();
+				section.appendChild(h);
+				para = null;
+				run = 0;
+				return;
+			}
+			if (!para || gap || run >= 8) {
+				para = document.createElement("p");
+				section.appendChild(para);
+				run = 0;
+			}
+			const span = document.createElement("span");
+			span.className = "sent";
+			span.title = "Sentence " + item.n.toLocaleString() + " \u00b7 " + itemLabel(item.item);
+			span.innerHTML = highlight(item.sentence, query) + " ";
+			para.appendChild(span);
+			run += 1;
+		});
+		list.appendChild(doc);
+	}
+
+	function renderSentenceList(list, items, query) {
+		list.classList.remove("reader-mode");
+		let currentItem;
+		let first = true;
+		items.forEach(function (item) {
+			if (first || item.item !== currentItem) {
+				currentItem = item.item;
+				first = false;
+				list.appendChild(makeDivider(currentItem));
+			}
+			const div = document.createElement("div");
+			div.className = "sentence-item" + (isCyberItem(item.item) ? " cyber" : "");
+			div.innerHTML =
+				'<span class="idx">' + item.n.toLocaleString() + '</span>' +
+				'<span>' + highlight(item.sentence, query) + '</span>';
+			list.appendChild(div);
+		});
+	}
+
+	function renderPage() {
+		if (!lastResponse) return;
+		const resp = lastResponse;
+		const query = document.getElementById("sentenceSearch").value.trim();
+		const list = document.getElementById("sentenceList");
+		list.innerHTML = "";
+		if (!resp.data.length) {
+			list.classList.remove("reader-mode");
+			list.innerHTML = '<div class="p-3 hint">No sentences found.</div>';
+		} else if (viewMode === "document") {
+			renderDocument(list, resp.data, query);
+		} else {
+			renderSentenceList(list, resp.data, query);
+		}
+		document.getElementById("sentencePageInfo").textContent =
+			"Page " + currentPage + " of " + lastPage;
+		document.getElementById("btnPrevPage").disabled = currentPage <= 1;
+		document.getElementById("btnNextPage").disabled = currentPage >= lastPage;
+		list.scrollTop = 0;
+	}
+
+	function setViewMode(mode) {
+		viewMode = mode;
+		document.getElementById("btnViewDocument").classList.toggle("active", mode === "document");
+		document.getElementById("btnViewSentences").classList.toggle("active", mode === "sentences");
+		renderPage();
+	}
+
+	function loadSentences(row, page) {
+		const query = document.getElementById("sentenceSearch").value.trim();
+		const params = new URLSearchParams({ page: page, size: sentencePageSize });
+		if (query) params.set("q", query);
+		if (itemFilter.size) params.set("items", Array.from(itemFilter).join(","));
+		const list = document.getElementById("sentenceList");
+		list.innerHTML = '<div class="p-3 hint">Loading sentences…</div>';
+		fetch(API + "/filing/" + row + "?" + params.toString())
+			.then(function (r) { return r.json(); })
+			.then(function (resp) {
+				if (resp.error) throw new Error(resp.error);
+				currentRow = row;
+				currentPage = page;
+				lastPage = resp.last_page;
+				lastResponse = resp;
+				document.getElementById("btnOpenReader").href = "/nolan/reader/" + row;
+				document.getElementById("sentenceTitle").textContent =
+					"CIK " + resp.filing.cik + " · " + resp.filing.adsh;
+				document.getElementById("sentenceMeta").textContent =
+					"filed " + resp.filing.filing_date + " · " +
+					resp.total_sentences.toLocaleString() + " sentences" +
+					(query || itemFilter.size
+						? " · " + resp.matched.toLocaleString() + " shown"
+						: "") +
+					(itemFilter.size
+						? " (Item " + Array.from(itemFilter).join(", ") + ")"
+						: "");
+				renderPage();
+			})
+			.catch(function (err) {
+				list.innerHTML = '<div class="p-3 text-danger small">Failed: ' +
+					escapeHtml(err.message) + '</div>';
+			});
+	}
+
+	fetch(API + "/columns")
+		.then(function (r) { return r.json(); })
+		.then(function (meta) {
+			if (meta.error) throw new Error(meta.error);
+			if (meta.sentence_page) sentencePageSize = meta.sentence_page;
+
+			table = new Tabulator("#data-table", {
+				height: "45vh",
+				layout: "fitColumns",
+				placeholder: "No data",
+				columns: buildColumns(meta.columns),
+				movableColumns: true,
+				headerSortTriState: true,
+				pagination: true,
+				paginationSize: 50,
+				paginationSizeSelector: [25, 50, 100, 250, 500],
+				ajaxURL: API,
+				paginationMode: "remote",
+				sortMode: "remote",
+				filterMode: "remote",
+				ajaxURLGenerator: function (url, config, params) {
+					const qs = currentFilterParams();
+					qs.set("page", params.page || 1);
+					qs.set("size", params.size || 50);
+					(params.sort || []).forEach(function (s, i) {
+						qs.append("sorters[" + i + "][field]", s.field);
+						qs.append("sorters[" + i + "][dir]", s.dir);
+					});
+					return url + "?" + qs.toString();
+				},
+				ajaxResponse: function (url, params, response) {
+					loader.textContent = "";
+					return response;
+				},
+			});
+
+			table.on("dataLoaded", refreshStats);
+			table.on("rowClick", function (e, row) {
+				document.getElementById("sentencePanel").style.display = "";
+				document.getElementById("sentenceSearch").value = "";
+				itemFilter.clear();
+				syncChipStates();
+				loadSentences(row.getData().row, 1);
+			});
+			refreshStats();
+		})
+		.catch(function (err) {
+			loader.textContent = "Failed: " + err.message;
+		});
+
+	document.getElementById("btnClearFilters").addEventListener("click", function () {
+		if (table) table.clearHeaderFilter();
+	});
+
+	document.getElementById("btnCloseSentences").addEventListener("click", function () {
+		document.getElementById("sentencePanel").style.display = "none";
+		currentRow = null;
+		lastResponse = null;
+	});
+
+	document.getElementById("btnViewDocument").addEventListener("click", function () {
+		setViewMode("document");
+	});
+
+	document.getElementById("btnViewSentences").addEventListener("click", function () {
+		setViewMode("sentences");
+	});
+
+	// Section filter chips: "All" clears, item chips toggle, the cyber button
+	// selects all four potentially cyber-relevant items at once.
+	function syncChipStates() {
+		document.querySelectorAll(".item-chip-bar [data-item]").forEach(function (btn) {
+			const item = btn.getAttribute("data-item");
+			if (item === "") btn.classList.toggle("active", itemFilter.size === 0);
+			else btn.classList.toggle("active", itemFilter.has(item));
+		});
+		const allCyber = CYBER_ITEMS.every(function (i) { return itemFilter.has(i); }) &&
+			itemFilter.size === CYBER_ITEMS.length;
+		document.getElementById("btnCyberItems").classList.toggle("active", allCyber);
+	}
+
+	function applyItemFilter() {
+		syncChipStates();
+		if (currentRow != null) loadSentences(currentRow, 1);
+	}
+
+	document.querySelectorAll(".item-chip-bar [data-item]").forEach(function (btn) {
+		btn.addEventListener("click", function () {
+			const item = btn.getAttribute("data-item");
+			if (item === "") itemFilter.clear();
+			else if (itemFilter.has(item)) itemFilter.delete(item);
+			else itemFilter.add(item);
+			applyItemFilter();
+		});
+	});
+
+	document.getElementById("btnCyberItems").addEventListener("click", function () {
+		const allCyber = CYBER_ITEMS.every(function (i) { return itemFilter.has(i); }) &&
+			itemFilter.size === CYBER_ITEMS.length;
+		itemFilter = allCyber ? new Set() : new Set(CYBER_ITEMS);
+		applyItemFilter();
+	});
+
+	document.getElementById("btnPrevPage").addEventListener("click", function () {
+		if (currentRow != null && currentPage > 1) loadSentences(currentRow, currentPage - 1);
+	});
+
+	document.getElementById("btnNextPage").addEventListener("click", function () {
+		if (currentRow != null && currentPage < lastPage) loadSentences(currentRow, currentPage + 1);
+	});
+
+	document.getElementById("sentenceSearch").addEventListener("input", function () {
+		if (currentRow == null) return;
+		clearTimeout(searchTimer);
+		searchTimer = setTimeout(function () { loadSentences(currentRow, 1); }, 300);
+	});
+
+	document.getElementById("btnDownload").addEventListener("click", function () {
+		if (!table) return;
+		loader.textContent = "Preparing CSV…";
+		const params = currentFilterParams();
+		params.set("paginate", "false");
+		table.getSorters().forEach(function (s, i) {
+			params.append("sorters[" + i + "][field]", s.field);
+			params.append("sorters[" + i + "][dir]", s.dir);
+		});
+		fetch(API + "?" + params.toString())
+			.then(function (r) { return r.json(); })
+			.then(function (rows) {
+				loader.textContent = "";
+				downloadJsonAsCsv(rows, "nolan_10k_filings_index.csv");
+			})
+			.catch(function (err) { loader.textContent = "Export failed: " + err.message; });
+	});
+
+	function downloadJsonAsCsv(rows, filename) {
+		if (!rows || !rows.length) { alert("No rows to export."); return; }
+		const cols = Object.keys(rows[0]);
+		const esc = function (v) {
+			if (v == null) return "";
+			const s = String(v);
+			if (s.indexOf(",") >= 0 || s.indexOf('"') >= 0 || s.indexOf("\n") >= 0) {
+				return '"' + s.replace(/"/g, '""') + '"';
+			}
+			return s;
+		};
+		const lines = [cols.join(",")];
+		rows.forEach(function (r) {
+			lines.push(cols.map(function (c) { return esc(r[c]); }).join(","));
+		});
+		const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement("a");
+		a.href = url; a.download = filename;
+		document.body.appendChild(a); a.click();
+		setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 100);
+	}
+});
+</script>
+{% endblock %}

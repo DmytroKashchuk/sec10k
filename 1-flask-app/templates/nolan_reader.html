@@ -1,0 +1,733 @@
+{% extends "base.html" %}
+
+{% block title %}10-K Reader · SEC 10K Longitudinal Study{% endblock %}
+
+{% block extra_head %}
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+	href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&family=Inter:wght@400;500;600;700&display=swap"
+	rel="stylesheet"
+/>
+<style>
+	:root {
+		--paper: #faf7f1;
+		--card: #ffffff;
+		--ink: #2a2723;
+		--ink-soft: #6b6459;
+		--ink-faint: #9a9287;
+		--line: #e7e0d4;
+		--accent: #1f6f5c;
+		--accent-soft: #e3f0eb;
+		--cyber: #b45309;
+		--cyber-soft: #fdf3e3;
+		--reader-font-size: 1.08rem;
+	}
+
+	body { background: var(--paper); }
+	.page-wrapper { padding: 0 0 4rem; }
+
+	/* ---------- reading progress bar ---------- */
+	#progressBar {
+		position: fixed;
+		top: 0;
+		left: 0;
+		height: 4px;
+		width: 0;
+		background: linear-gradient(90deg, var(--accent), #3fa08a);
+		z-index: 2000;
+		transition: width 0.1s linear;
+	}
+
+	/* ---------- hero header ---------- */
+	.reader-hero {
+		background: var(--card);
+		border-bottom: 1px solid var(--line);
+		padding: 2.2rem 1.5rem 1.8rem;
+	}
+	.reader-hero .inner { max-width: 1180px; margin: 0 auto; }
+	.reader-hero .kicker {
+		font-family: "Inter", sans-serif;
+		font-size: 0.78rem;
+		font-weight: 600;
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+		color: var(--accent);
+		margin-bottom: 0.4rem;
+	}
+	.reader-hero h1 {
+		font-family: "Source Serif 4", Georgia, serif;
+		font-weight: 700;
+		font-size: clamp(1.6rem, 3.4vw, 2.4rem);
+		color: var(--ink);
+		margin-bottom: 0.55rem;
+	}
+	.reader-hero .meta {
+		font-family: "Inter", sans-serif;
+		font-size: 0.88rem;
+		color: var(--ink-soft);
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem 1.1rem;
+	}
+	.reader-hero .meta b { color: var(--ink); font-weight: 600; }
+	.hero-actions { margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem; }
+	.btn-soft {
+		font-family: "Inter", sans-serif;
+		font-size: 0.85rem;
+		font-weight: 500;
+		border: 1px solid var(--line);
+		background: var(--card);
+		color: var(--ink);
+		border-radius: 999px;
+		padding: 0.38rem 0.95rem;
+		text-decoration: none;
+		transition: all 0.15s ease;
+	}
+	.btn-soft:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+	.btn-soft.active { background: var(--cyber-soft); border-color: var(--cyber); color: var(--cyber); }
+
+	/* ---------- layout ---------- */
+	.reader-layout {
+		max-width: 1180px;
+		margin: 0 auto;
+		padding: 1.6rem 1.5rem 0;
+		display: grid;
+		grid-template-columns: 300px minmax(0, 1fr);
+		gap: 2.4rem;
+		align-items: start;
+	}
+
+	/* ---------- sidebar ---------- */
+	.reader-side {
+		position: sticky;
+		top: 1rem;
+		max-height: calc(100vh - 2rem);
+		overflow-y: auto;
+		scrollbar-width: thin;
+		padding-bottom: 1rem;
+		font-family: "Inter", sans-serif;
+	}
+	.side-card {
+		background: var(--card);
+		border: 1px solid var(--line);
+		border-radius: 14px;
+		padding: 1rem 1rem 0.85rem;
+		margin-bottom: 1rem;
+	}
+	.side-card .side-title {
+		font-size: 0.72rem;
+		font-weight: 700;
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		color: var(--ink-faint);
+		margin-bottom: 0.65rem;
+	}
+	.toc a {
+		display: block;
+		text-decoration: none;
+		border-radius: 9px;
+		padding: 0.42rem 0.55rem;
+		margin: 0 -0.25rem 2px;
+		color: var(--ink);
+		border-left: 3px solid transparent;
+		transition: background 0.12s ease;
+	}
+	.toc a:hover { background: #f4efe6; }
+	.toc a.active { background: var(--accent-soft); border-left-color: var(--accent); }
+	.toc a.cyber.active { background: var(--cyber-soft); border-left-color: var(--cyber); }
+	.toc a.dimmed { opacity: 0.35; }
+	.toc .t-row { display: flex; align-items: baseline; gap: 0.5rem; }
+	.toc .t-chip {
+		flex: none;
+		font-size: 0.68rem;
+		font-weight: 700;
+		color: var(--accent);
+		background: var(--accent-soft);
+		border-radius: 5px;
+		padding: 0.1rem 0.4rem;
+		min-width: 3.4em;
+		text-align: center;
+	}
+	.toc a.cyber .t-chip { color: var(--cyber); background: var(--cyber-soft); }
+	.toc .t-title {
+		font-size: 0.85rem;
+		font-weight: 600;
+		line-height: 1.25;
+		flex: 1;
+	}
+	.toc .t-count { flex: none; font-size: 0.72rem; color: var(--ink-faint); }
+	.toc .t-plain {
+		font-size: 0.74rem;
+		color: var(--ink-soft);
+		line-height: 1.3;
+		margin: 0.15rem 0 0 calc(3.4em + 0.9rem);
+	}
+
+	.side-controls .row-line {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+		margin-bottom: 0.6rem;
+	}
+	.side-controls .row-line:last-child { margin-bottom: 0; }
+	.side-controls label { font-size: 0.83rem; color: var(--ink-soft); }
+	.fontsize-btns button {
+		border: 1px solid var(--line);
+		background: var(--card);
+		border-radius: 8px;
+		width: 34px;
+		height: 30px;
+		font-weight: 700;
+		color: var(--ink);
+	}
+	.fontsize-btns button:hover { border-color: var(--accent); color: var(--accent); }
+	.form-switch .form-check-input:checked { background-color: var(--cyber); border-color: var(--cyber); }
+
+	.side-search input {
+		font-size: 0.88rem;
+		border-radius: 9px;
+		border: 1px solid var(--line);
+	}
+	.side-search input:focus { border-color: var(--accent); box-shadow: 0 0 0 0.15rem rgba(31,111,92,0.15); }
+	.search-nav {
+		display: flex;
+		align-items: center;
+		gap: 0.45rem;
+		margin-top: 0.55rem;
+		font-size: 0.8rem;
+		color: var(--ink-soft);
+	}
+	.search-nav button {
+		border: 1px solid var(--line);
+		background: var(--card);
+		border-radius: 7px;
+		width: 30px;
+		height: 27px;
+		line-height: 1;
+		color: var(--ink);
+	}
+	.search-nav button:disabled { opacity: 0.4; }
+
+	/* ---------- article ---------- */
+	.reader-article {
+		font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
+		font-size: var(--reader-font-size);
+		line-height: 1.85;
+		color: var(--ink);
+		max-width: 760px;
+		min-width: 0;
+	}
+	.doc-section { margin-bottom: 0.6rem; }
+	.doc-section > .sec-head {
+		border-top: 1px solid var(--line);
+		padding-top: 1.9rem;
+		margin: 2.2rem 0 1.1rem;
+		cursor: pointer;
+	}
+	.doc-section:first-child > .sec-head { border-top: none; margin-top: 0.4rem; }
+	.sec-head .overline {
+		font-family: "Inter", sans-serif;
+		font-size: 0.74rem;
+		font-weight: 700;
+		letter-spacing: 0.13em;
+		text-transform: uppercase;
+		color: var(--accent);
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+	}
+	.doc-section.cyber .sec-head .overline { color: var(--cyber); }
+	.badge-cyber {
+		font-size: 0.68rem;
+		font-weight: 600;
+		letter-spacing: 0.02em;
+		text-transform: none;
+		color: var(--cyber);
+		background: var(--cyber-soft);
+		border: 1px solid #eec08a;
+		border-radius: 999px;
+		padding: 0.08rem 0.55rem;
+	}
+	.sec-head h2 {
+		font-family: "Source Serif 4", Georgia, serif;
+		font-weight: 700;
+		font-size: 1.55rem;
+		margin: 0.3rem 0 0.15rem;
+		color: var(--ink);
+	}
+	.sec-head .plain {
+		font-family: "Inter", sans-serif;
+		font-size: 0.9rem;
+		color: var(--ink-soft);
+	}
+	.sec-head .sec-meta {
+		font-family: "Inter", sans-serif;
+		font-size: 0.76rem;
+		color: var(--ink-faint);
+		margin-top: 0.25rem;
+	}
+	.sec-head .caret { transition: transform 0.15s ease; display: inline-block; }
+	.doc-section.collapsed .sec-head .caret { transform: rotate(-90deg); }
+	.doc-section.collapsed .sec-body { display: none; }
+
+	.sec-body p { margin-bottom: 1.15rem; text-align: left; }
+	.sec-body h4 {
+		font-family: "Inter", sans-serif;
+		font-size: 0.95rem;
+		font-weight: 700;
+		color: var(--ink);
+		margin: 1.9rem 0 0.8rem;
+	}
+	.sec-body .figures {
+		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+		font-size: 0.78em;
+		line-height: 1.65;
+		color: var(--ink-soft);
+		background: #f5f1e8;
+		border: 1px solid var(--line);
+		border-radius: 10px;
+		padding: 0.8rem 1rem;
+		margin-bottom: 1.15rem;
+		overflow-wrap: anywhere;
+	}
+	.reader-article mark {
+		background: #ffe9a8;
+		padding: 0 0.08em;
+		border-radius: 3px;
+	}
+	.reader-article mark.current {
+		background: #f6b73c;
+		outline: 2px solid #d97706;
+	}
+
+	.doc-section.hidden-by-filter { display: none; }
+
+	.empty-note {
+		font-family: "Inter", sans-serif;
+		color: var(--ink-soft);
+		font-size: 0.9rem;
+		background: var(--card);
+		border: 1px dashed var(--line);
+		border-radius: 12px;
+		padding: 1rem 1.2rem;
+		margin: 1rem 0 2rem;
+	}
+
+	#backTop {
+		position: fixed;
+		right: 1.4rem;
+		bottom: 1.4rem;
+		z-index: 1500;
+		border: 1px solid var(--line);
+		background: var(--card);
+		color: var(--ink);
+		border-radius: 999px;
+		padding: 0.5rem 1rem;
+		font-family: "Inter", sans-serif;
+		font-size: 0.85rem;
+		box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+		display: none;
+	}
+	#backTop:hover { border-color: var(--accent); color: var(--accent); }
+
+	@media (max-width: 900px) {
+		.reader-layout { grid-template-columns: 1fr; gap: 0.8rem; }
+		.reader-side { position: static; max-height: none; }
+	}
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="progressBar"></div>
+
+<div class="reader-hero">
+	<div class="inner">
+		<div class="kicker">Annual Report · Form 10-K</div>
+		<h1 id="companyName">Loading…</h1>
+		<div class="meta" id="filingMeta"></div>
+		<div class="hero-actions">
+			<a class="btn-soft" href="/nolan">&larr; All filings</a>
+			<a class="btn-soft" id="edgarLink" href="#" target="_blank" rel="noopener">View original on SEC EDGAR &nearr;</a>
+			<button class="btn-soft" id="btnCyberOnly" type="button">&#9889; Cyber-relevant sections only</button>
+		</div>
+	</div>
+</div>
+
+<div class="reader-layout">
+	<aside class="reader-side">
+		<div class="side-card side-search">
+			<div class="side-title">Search this filing</div>
+			<input type="search" class="form-control form-control-sm" id="readerSearch"
+				placeholder="e.g. cybersecurity, revenue…" autocomplete="off" />
+			<div class="search-nav" id="searchNav" style="display:none">
+				<button id="btnPrevMatch" title="Previous match">&uarr;</button>
+				<button id="btnNextMatch" title="Next match">&darr;</button>
+				<span id="matchCount"></span>
+			</div>
+		</div>
+
+		<div class="side-card side-controls">
+			<div class="side-title">Reading comfort</div>
+			<div class="row-line">
+				<label>Text size</label>
+				<span class="fontsize-btns">
+					<button id="fontMinus" type="button" title="Smaller text">A&minus;</button>
+					<button id="fontPlus" type="button" title="Larger text">A+</button>
+				</span>
+			</div>
+			<div class="row-line">
+				<label for="switchCollapse">Collapse all sections</label>
+				<div class="form-check form-switch m-0">
+					<input class="form-check-input" type="checkbox" id="switchCollapse" />
+				</div>
+			</div>
+		</div>
+
+		<div class="side-card">
+			<div class="side-title">Contents</div>
+			<nav class="toc" id="toc"></nav>
+		</div>
+	</aside>
+
+	<main class="reader-article" id="article">
+		<div class="empty-note">Loading the filing, one moment&hellip;</div>
+	</main>
+</div>
+
+<button id="backTop" type="button">&uarr; Top</button>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+	"use strict";
+
+	const ROW = {{ row }};
+	const article = document.getElementById("article");
+	const toc = document.getElementById("toc");
+
+	let DATA = null;
+	let cyberOnly = false;
+	let query = "";
+	let fontStep = 0;
+	let marks = [];
+	let currentMark = -1;
+
+	/* ---------------- helpers ---------------- */
+
+	function escapeHtml(s) {
+		return String(s)
+			.replace(/&/g, "&amp;").replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+	}
+
+	function highlight(text, q) {
+		const safe = escapeHtml(text);
+		if (!q) return safe;
+		const esc = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+		return safe.replace(new RegExp(esc, "gi"), function (m) {
+			return "<mark>" + m + "</mark>";
+		});
+	}
+
+	function titleCase(name) {
+		if (!name) return name;
+		if (name !== name.toUpperCase()) return name;
+		const small = new Set(["OF", "THE", "AND", "FOR", "IN", "ON", "AT", "TO", "BY", "DE", "LA"]);
+		return name.split(/\s+/).map(function (w, i) {
+			if (/^[A-Z]{1,3}\.?$|^\d/.test(w) && w.length <= 4 && !/^(THE|AND|NEW|OLD|BIG|ONE|TWO|SIX|TEN)$/.test(w)) {
+				return w; // keep short acronyms like LLC, USA, 3M
+			}
+			const lower = w.toLowerCase();
+			if (i > 0 && small.has(w)) return lower;
+			return lower.replace(/(^|[-\/])(\w)/g, function (m, p, c) { return p + c.toUpperCase(); });
+		}).join(" ");
+	}
+
+	function chipText(item) {
+		return item === "" ? "Cover" : "Item " + item;
+	}
+
+	function fmtDate(d) {
+		const m = String(d).match(/^(\d{4})(\d{2})(\d{2})$/);
+		if (!m) return d;
+		const months = ["January","February","March","April","May","June",
+			"July","August","September","October","November","December"];
+		return months[Number(m[2]) - 1] + " " + Number(m[3]) + ", " + m[1];
+	}
+
+	// A sentence rendered as a sub-heading inside a section body.
+	function isHeading(text) {
+		const t = text.trim();
+		if (!t || t.length > 90) return false;
+		if (/^(PART|ITEM|Item)\s+[0-9IVXLC]+[A-C]?\b/.test(t)) return true;
+		const letters = t.replace(/[^A-Za-z]/g, "");
+		if (letters.length >= 6 && letters === letters.toUpperCase()) return true;
+		return false;
+	}
+
+	// Table debris / numeric rows: few letters, lots of digits & symbols.
+	function isFigures(text) {
+		const t = text.trim();
+		if (t.length < 12) return false;
+		const letters = (t.match(/[A-Za-z]/g) || []).length;
+		const digits = (t.match(/[0-9]/g) || []).length;
+		return digits >= 8 && letters < digits * 1.2;
+	}
+
+	/* ---------------- rendering ---------------- */
+
+	function buildSection(sec, idx) {
+		const wrap = document.createElement("section");
+		wrap.className = "doc-section" + (sec.cyber ? " cyber" : "");
+		wrap.id = "sec-" + idx;
+		wrap.dataset.index = idx;
+
+		const head = document.createElement("header");
+		head.className = "sec-head";
+		head.innerHTML =
+			'<div class="overline"><span class="caret">&#9662;</span>' +
+			'<span>' + escapeHtml(chipText(sec.item)) + '</span>' +
+			(sec.cyber ? '<span class="badge-cyber">&#9889; cyber-relevant</span>' : "") +
+			'</div>' +
+			'<h2>' + escapeHtml(sec.title) + '</h2>' +
+			(sec.plain ? '<div class="plain">' + escapeHtml(sec.plain) + '</div>' : "") +
+			'<div class="sec-meta">' + sec.sentences.length.toLocaleString() +
+			' sentences &middot; starts at sentence ' + sec.start.toLocaleString() +
+			' &middot; click to collapse</div>';
+		head.addEventListener("click", function () {
+			wrap.classList.toggle("collapsed");
+		});
+		wrap.appendChild(head);
+
+		const body = document.createElement("div");
+		body.className = "sec-body";
+
+		let para = null;
+		let fig = null;
+		let run = 0;
+		sec.sentences.forEach(function (s) {
+			if (isHeading(s)) {
+				const h = document.createElement("h4");
+				h.innerHTML = highlight(s, query);
+				body.appendChild(h);
+				para = null; fig = null; run = 0;
+				return;
+			}
+			if (isFigures(s)) {
+				if (!fig) {
+					fig = document.createElement("div");
+					fig.className = "figures";
+					body.appendChild(fig);
+				}
+				fig.innerHTML += highlight(s, query) + " ";
+				para = null; run = 0;
+				return;
+			}
+			fig = null;
+			const endsColon = /:\s*$/.test(s);
+			if (!para || run >= 5) {
+				para = document.createElement("p");
+				body.appendChild(para);
+				run = 0;
+			}
+			para.innerHTML += highlight(s, query) + " ";
+			run += 1;
+			if (endsColon) { para = null; run = 0; }
+		});
+		wrap.appendChild(body);
+		return wrap;
+	}
+
+	function render() {
+		if (!DATA) return;
+		article.innerHTML = "";
+		toc.innerHTML = "";
+
+		let shown = 0;
+		DATA.sections.forEach(function (sec, idx) {
+			const hidden = cyberOnly && !sec.cyber;
+
+			// article section
+			const el = buildSection(sec, idx);
+			if (hidden) el.classList.add("hidden-by-filter"); else shown += 1;
+			article.appendChild(el);
+
+			// toc entry
+			const a = document.createElement("a");
+			a.href = "#sec-" + idx;
+			a.className = (sec.cyber ? "cyber" : "") + (hidden ? " dimmed" : "");
+			a.innerHTML =
+				'<span class="t-row">' +
+				'<span class="t-chip">' + escapeHtml(chipText(sec.item)) + '</span>' +
+				'<span class="t-title">' + escapeHtml(sec.title) + '</span>' +
+				'<span class="t-count">' + sec.sentences.length.toLocaleString() + '</span>' +
+				'</span>' +
+				(sec.plain ? '<span class="t-plain">' + escapeHtml(sec.plain) + '</span>' : "");
+			a.addEventListener("click", function (e) {
+				e.preventDefault();
+				const target = document.getElementById("sec-" + idx);
+				target.classList.remove("collapsed");
+				target.scrollIntoView({ behavior: "smooth", block: "start" });
+			});
+			toc.appendChild(a);
+		});
+
+		if (!shown) {
+			const note = document.createElement("div");
+			note.className = "empty-note";
+			note.textContent = "No cyber-relevant sections were detected in this filing.";
+			article.prepend(note);
+		}
+
+		collectMarks();
+		observeSections();
+	}
+
+	/* ---------------- search ---------------- */
+
+	function collectMarks() {
+		marks = Array.prototype.slice.call(
+			article.querySelectorAll(".doc-section:not(.hidden-by-filter) mark"));
+		currentMark = marks.length ? 0 : -1;
+		updateSearchNav();
+		if (currentMark >= 0) focusMark(false);
+	}
+
+	function updateSearchNav() {
+		const nav = document.getElementById("searchNav");
+		const count = document.getElementById("matchCount");
+		if (!query) { nav.style.display = "none"; return; }
+		nav.style.display = "flex";
+		count.textContent = marks.length
+			? (currentMark + 1) + " of " + marks.length.toLocaleString() + " matches"
+			: "No matches";
+		document.getElementById("btnPrevMatch").disabled = marks.length < 2;
+		document.getElementById("btnNextMatch").disabled = marks.length < 2;
+	}
+
+	function focusMark(scroll) {
+		marks.forEach(function (m) { m.classList.remove("current"); });
+		if (currentMark < 0) return;
+		const m = marks[currentMark];
+		m.classList.add("current");
+		const sec = m.closest(".doc-section");
+		if (sec) sec.classList.remove("collapsed");
+		if (scroll !== false) {
+			m.scrollIntoView({ behavior: "smooth", block: "center" });
+		}
+		updateSearchNav();
+	}
+
+	let searchTimer = null;
+	document.getElementById("readerSearch").addEventListener("input", function (e) {
+		clearTimeout(searchTimer);
+		searchTimer = setTimeout(function () {
+			query = e.target.value.trim();
+			render();
+			if (marks.length) focusMark();
+		}, 300);
+	});
+	document.getElementById("readerSearch").addEventListener("keydown", function (e) {
+		if (e.key === "Enter" && marks.length) {
+			currentMark = (currentMark + 1) % marks.length;
+			focusMark();
+		}
+	});
+	document.getElementById("btnNextMatch").addEventListener("click", function () {
+		if (!marks.length) return;
+		currentMark = (currentMark + 1) % marks.length;
+		focusMark();
+	});
+	document.getElementById("btnPrevMatch").addEventListener("click", function () {
+		if (!marks.length) return;
+		currentMark = (currentMark - 1 + marks.length) % marks.length;
+		focusMark();
+	});
+
+	/* ---------------- controls ---------------- */
+
+	document.getElementById("btnCyberOnly").addEventListener("click", function () {
+		cyberOnly = !cyberOnly;
+		this.classList.toggle("active", cyberOnly);
+		render();
+		window.scrollTo({ top: 0 });
+	});
+
+	function applyFontSize() {
+		const size = 1.08 + fontStep * 0.09;
+		document.documentElement.style.setProperty("--reader-font-size", size + "rem");
+	}
+	document.getElementById("fontPlus").addEventListener("click", function () {
+		fontStep = Math.min(4, fontStep + 1); applyFontSize();
+	});
+	document.getElementById("fontMinus").addEventListener("click", function () {
+		fontStep = Math.max(-2, fontStep - 1); applyFontSize();
+	});
+
+	document.getElementById("switchCollapse").addEventListener("change", function (e) {
+		article.querySelectorAll(".doc-section").forEach(function (sec) {
+			sec.classList.toggle("collapsed", e.target.checked);
+		});
+	});
+
+	/* ---------------- scroll-spy + progress ---------------- */
+
+	let observer = null;
+	function observeSections() {
+		if (observer) observer.disconnect();
+		const links = toc.querySelectorAll("a");
+		observer = new IntersectionObserver(function (entries) {
+			entries.forEach(function (entry) {
+				if (!entry.isIntersecting) return;
+				const idx = entry.target.dataset.index;
+				links.forEach(function (l) {
+					l.classList.toggle("active", l.getAttribute("href") === "#sec-" + idx);
+				});
+			});
+		}, { rootMargin: "0px 0px -75% 0px", threshold: 0 });
+		article.querySelectorAll(".doc-section:not(.hidden-by-filter)").forEach(function (sec) {
+			observer.observe(sec);
+		});
+	}
+
+	const backTop = document.getElementById("backTop");
+	window.addEventListener("scroll", function () {
+		const h = document.documentElement;
+		const max = h.scrollHeight - h.clientHeight;
+		document.getElementById("progressBar").style.width =
+			(max > 0 ? (h.scrollTop / max) * 100 : 0) + "%";
+		backTop.style.display = h.scrollTop > 600 ? "block" : "none";
+	}, { passive: true });
+	backTop.addEventListener("click", function () {
+		window.scrollTo({ top: 0, behavior: "smooth" });
+	});
+
+	/* ---------------- load ---------------- */
+
+	fetch("/api/nolan/reader/" + ROW)
+		.then(function (r) { return r.json(); })
+		.then(function (resp) {
+			if (resp.error) throw new Error(resp.error);
+			DATA = resp;
+			const f = resp.filing;
+			document.getElementById("companyName").textContent =
+				titleCase(f.company) || ("CIK " + f.cik);
+			document.title = (titleCase(f.company) || "CIK " + f.cik) + " · 10-K Reader";
+			document.getElementById("filingMeta").innerHTML =
+				'<span>Filed <b>' + escapeHtml(fmtDate(f.filing_date)) + '</b></span>' +
+				'<span>CIK <b>' + escapeHtml(f.cik) + '</b></span>' +
+				'<span>Accession <b>' + escapeHtml(f.adsh) + '</b></span>' +
+				'<span><b>' + resp.total_sentences.toLocaleString() + '</b> sentences</span>';
+			document.getElementById("edgarLink").href = f.edgar_url;
+			render();
+		})
+		.catch(function (err) {
+			article.innerHTML = '<div class="empty-note">Could not load this filing: ' +
+				escapeHtml(err.message) + '</div>';
+		});
+})();
+</script>
+{% endblock %}
