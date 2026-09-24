@@ -36,7 +36,7 @@ NOLAN_SENTENCE_PAGE = 200
 
 # Per-item sentence CSVs (~1.6 GB in total). They are loaded once into a SQLite
 # database so the pages can filter/sort/paginate without holding them in RAM.
-RAGHAVENDRA_DIR = os.path.join(BASE_DIR, "raghavendra")
+RAGHAVENDRA_DIR = os.path.join(DATA_DIR, "raghavendra")
 RAGHAVENDRA_DB = os.path.join(RAGHAVENDRA_DIR, "raghavendra.sqlite")
 
 RAGHAVENDRA_FILES = {
