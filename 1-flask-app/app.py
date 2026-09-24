@@ -36,15 +36,15 @@ NOLAN_SENTENCE_PAGE = 200
 
 # Per-item sentence CSVs (~1.6 GB in total). They are loaded once into a SQLite
 # database so the pages can filter/sort/paginate without holding them in RAM.
-RAGHAVENDRA_DIR = os.path.join(DATA_DIR, "raghavendra")
+RAGHAVENDRA_DIR = os.path.join(BASE_DIR, "raghavendra")
 RAGHAVENDRA_DB = os.path.join(RAGHAVENDRA_DIR, "raghavendra.sqlite")
 
 RAGHAVENDRA_FILES = {
-    "item_1a": "Item_1A_10k_sentences.csv",
-    "item_7": "Item_7_10k_sentences.csv",
-    "item_8": "Item_8_10k_sentences.csv",
-    "item_9a": "Item_9A_10k_sentences.csv",
-    "item_9b": "Item_9B_10k_sentences.csv",
+    "item_1a": "layer0_predictions_Item_1A_10k_sentences (1).csv",
+    "item_7": "layer0_predictions_Item_7_10k_sentences (1).csv",
+    "item_8": "layer0_predictions_Item_8_10k_sentences (1).csv",
+    "item_9a": "layer0_predictions_Item_9A_10k_sentences (1).csv",
+    "item_9b": "layer0_predictions_Item_9B_10k_sentences (1).csv",
 }
 
 RAGHAVENDRA_LABELS = {
@@ -57,8 +57,10 @@ RAGHAVENDRA_LABELS = {
 
 RAGHAVENDRA_COLUMNS = [
     "cik", "adsh", "filing_date", "section", "sentence", "word_count",
+    "layer0_prediction",
 ]
 RAGHAVENDRA_NUMERIC = {"cik", "filing_date", "word_count"}
+RAGHAVENDRA_CATEGORICAL = {"layer0_prediction"}
 RAGHAVENDRA_BATCH = 50000
 # Filtered CSV exports are capped so the browser never receives millions of rows.
 RAGHAVENDRA_MAX_EXPORT = 100000
@@ -607,9 +609,9 @@ def _import_raghavendra_csv(conn: sqlite3.Connection, key: str):
     conn.execute(
         f'CREATE TABLE "{key}" ('
         "cik INTEGER, adsh TEXT, filing_date INTEGER, "
-        "section TEXT, sentence TEXT, word_count INTEGER)"
+        "section TEXT, sentence TEXT, word_count INTEGER, layer0_prediction TEXT)"
     )
-    insert = f'INSERT INTO "{key}" VALUES (?, ?, ?, ?, ?, ?)'
+    insert = f'INSERT INTO "{key}" VALUES (?, ?, ?, ?, ?, ?, ?)'
 
     def to_int(value):
         try:
@@ -629,6 +631,7 @@ def _import_raghavendra_csv(conn: sqlite3.Connection, key: str):
                 (record.get("section") or "").strip(),
                 record.get("sentence") or "",
                 to_int(record.get("word_count")),
+                (record.get("layer0_prediction") or "").strip(),
             ))
             if len(batch) >= RAGHAVENDRA_BATCH:
                 conn.executemany(insert, batch)
@@ -639,7 +642,7 @@ def _import_raghavendra_csv(conn: sqlite3.Connection, key: str):
             rows += len(batch)
     conn.commit()
 
-    for col in ("cik", "adsh", "filing_date", "word_count"):
+    for col in ("cik", "adsh", "filing_date", "word_count", "layer0_prediction"):
         conn.execute(f'CREATE INDEX "idx_{key}_{col}" ON "{key}" ("{col}")')
     conn.commit()
     return rows
@@ -763,6 +766,24 @@ def get_raghavendra_total(key: str) -> int:
     return _raghavendra_cache["totals"][key]
 
 
+def get_raghavendra_categories(key: str):
+    cache = _raghavendra_cache.setdefault("categories", {})
+    if key not in cache:
+        conn = _open_raghavendra_db()
+        try:
+            cache[key] = {
+                col: [
+                    r[0] for r in conn.execute(
+                        f'SELECT DISTINCT "{col}" FROM "{key}" ORDER BY 1'
+                    ).fetchall()
+                ]
+                for col in sorted(RAGHAVENDRA_CATEGORICAL)
+            }
+        finally:
+            conn.close()
+    return cache[key]
+
+
 def compute_raghavendra_stats(key: str, where: str, params):
     conn = _open_raghavendra_db()
     try:
@@ -773,11 +794,24 @@ def compute_raghavendra_stats(key: str, where: str, params):
             f'FROM "{key}"{where}',
             params,
         ).fetchone()
+        predictions = conn.execute(
+            f'SELECT layer0_prediction, COUNT(*) FROM "{key}"{where} '
+            "GROUP BY layer0_prediction ORDER BY COUNT(*) DESC",
+            params,
+        ).fetchall()
     finally:
         conn.close()
 
     total = int(row[0] or 0)
-    return [
+    prediction_cards = [
+        {
+            "label": label or "(no prediction)",
+            "value": int(count),
+            "pct": round(100 * count / total, 1) if total else 0,
+        }
+        for label, count in predictions
+    ]
+    return prediction_cards + [
         {"label": "Sentences", "value": total},
         {"label": "Unique Companies (CIK)", "value": int(row[1] or 0)},
         {"label": "Filings (adsh)", "value": int(row[2] or 0)},
@@ -1881,6 +1915,7 @@ def raghavendra_columns(key):
         return jsonify({
             "columns": RAGHAVENDRA_COLUMNS,
             "numeric": sorted(RAGHAVENDRA_NUMERIC),
+            "categorical": get_raghavendra_categories(key),
             "total": get_raghavendra_total(key),
             "max_export": RAGHAVENDRA_MAX_EXPORT,
         })

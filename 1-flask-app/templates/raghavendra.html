@@ -45,7 +45,7 @@
 		<code>filing_date</code>, <code>word_count</code>) accept <code>&gt;</code>,
 		<code>&lt;</code>, <code>&gt;=</code>, <code>&lt;=</code>, <code>=</code>
 		prefixes in the header filter (e.g. <code>&gt;50</code>); text columns match
-		on substring. Filtering on <code>sentence</code> scans the full table and can
+		on substring; <code>layer0_prediction</code> uses a dropdown. Filtering on <code>sentence</code> scans the full table and can
 		take a few seconds.
 	</p>
 
@@ -76,6 +76,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
 	let table = null;
 	let numeric = new Set();
+	let categorical = {};
 	let maxExport = 100000;
 
 	// Header filters are sent to the server as-is; a leading comparison
@@ -92,6 +93,8 @@ document.addEventListener("DOMContentLoaded", function () {
 				const m = String(value).trim().match(/^(>=|<=|!=|>|<|=)\s*(.+)$/);
 				if (m) { type = m[1]; value = m[2]; }
 				else { type = "="; }
+			} else if (categorical[f.field]) {
+				type = "=";
 			}
 			params.append("filters[" + i + "][field]", f.field);
 			params.append("filters[" + i + "][type]", type);
@@ -108,8 +111,9 @@ document.addEventListener("DOMContentLoaded", function () {
 			const card = document.createElement("div");
 			card.className = "stat-card";
 			const val = (s.value != null ? s.value.toLocaleString() : "-") + (s.suffix || "");
+			const pct = s.pct != null ? ' <small class="text-muted">(' + s.pct + '%)</small>' : "";
 			card.innerHTML =
-				'<div class="stat-value">' + val + '</div>' +
+				'<div class="stat-value">' + val + pct + '</div>' +
 				'<div class="stat-label">' + s.label + '</div>';
 			host.appendChild(card);
 		});
@@ -157,6 +161,11 @@ document.addEventListener("DOMContentLoaded", function () {
 			if (name === "cik") { col.hozAlign = "right"; col.width = 110; }
 			if (name === "filing_date") col.width = 130;
 			if (name === "section") col.width = 110;
+			if (categorical[name]) {
+				col.width = 220;
+				col.headerFilter = "list";
+				col.headerFilterParams = { values: [""].concat(categorical[name]), clearable: true };
+			}
 			return col;
 		});
 	}
@@ -181,6 +190,7 @@ document.addEventListener("DOMContentLoaded", function () {
 		.then(function (meta) {
 			if (meta.error) throw new Error(meta.error);
 			numeric = new Set(meta.numeric || []);
+			categorical = meta.categorical || {};
 			if (meta.max_export) maxExport = meta.max_export;
 
 			const columns = buildColumns(meta.columns);
