@@ -40,11 +40,11 @@ RAGHAVENDRA_DIR = os.path.join(DATA_DIR, "raghavendra")
 RAGHAVENDRA_DB = os.path.join(RAGHAVENDRA_DIR, "raghavendra.sqlite")
 
 RAGHAVENDRA_FILES = {
-    "item_1a": "layer0_predictions_Item_1A_10k_sentences (1).csv",
-    "item_7": "layer0_predictions_Item_7_10k_sentences (1).csv",
-    "item_8": "layer0_predictions_Item_8_10k_sentences (1).csv",
-    "item_9a": "layer0_predictions_Item_9A_10k_sentences (1).csv",
-    "item_9b": "layer0_predictions_Item_9B_10k_sentences (1).csv",
+    "item_1a": "layer0_predictions_Item_1A_10k_sentences.csv",
+    "item_7": "layer0_predictions_Item_7_10k_sentences.csv",
+    "item_8": "layer0_predictions_Item_8_10k_sentences.csv",
+    "item_9a": "layer0_predictions_Item_9A_10k_sentences.csv",
+    "item_9b": "layer0_predictions_Item_9B_10k_sentences.csv",
 }
 
 RAGHAVENDRA_LABELS = {
