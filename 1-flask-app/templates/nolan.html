@@ -4,6 +4,14 @@
 
 {% block extra_head %}
 <style>
+	.page-header {
+		display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-start;
+		justify-content: space-between; margin-bottom: 1rem;
+	}
+	.page-header h4 { margin-bottom: .2rem; }
+	.page-header .lead-text { font-size: .85rem; color: #666; max-width: 760px; margin: 0; }
+	.page-header .actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+	.page-header .actions .btn { font-size: .78rem; }
 	.stat-cards { display: flex; flex-wrap: wrap; gap: .75rem; margin-bottom: 1rem; }
 	.stat-card {
 		background: #fff; border: 1px solid #e0e0e0; border-radius: 6px;
@@ -14,6 +22,14 @@
 		font-size: .7rem; color: #888;
 		text-transform: uppercase; letter-spacing: .3px;
 	}
+	.panel {
+		background: #fff; border: 1px solid #e0e0e0; border-radius: 6px;
+		padding: .9rem 1rem;
+	}
+	.panel-title {
+		font-size: .72rem; font-weight: 600; color: #888;
+		text-transform: uppercase; letter-spacing: .4px; margin-bottom: .5rem;
+	}
 	.toolbar {
 		display: flex; flex-wrap: wrap; gap: .5rem;
 		align-items: center; margin-bottom: .6rem;
@@ -23,10 +39,21 @@
 	.tabulator .tabulator-cell { white-space: normal; }
 	.tabulator-row.tabulator-selectable:hover { cursor: pointer; }
 	.hint { font-size: .75rem; color: #888; }
-	.sentence-panel {
-		background: #fff; border: 1px solid #e0e0e0; border-radius: 6px;
-		padding: .9rem 1rem; margin-top: 1rem;
+	.sentence-panel { margin-top: 1rem; }
+	.filing-head { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .8rem; }
+	.filing-head .filing-id { font-size: 1rem; font-weight: 600; }
+	.filing-head .filing-id small { font-weight: 400; color: #777; font-size: .78rem; }
+	.search-bar {
+		display: flex; flex-wrap: wrap; gap: .5rem; align-items: center;
+		margin-top: .7rem; padding: .6rem .7rem;
+		background: #f7f7f9; border: 1px solid #e6e6ea; border-radius: 6px;
 	}
+	.search-bar .form-control, .search-bar .form-select { font-size: .8rem; }
+	.search-bar .form-check { margin: 0; font-size: .78rem; }
+	.search-bar .form-check-input { margin-top: .2rem; }
+	.match-info { font-size: .76rem; color: #555; white-space: nowrap; }
+	.match-info strong { color: #222; }
+	.match-nav .btn { font-size: .74rem; padding: .15rem .5rem; }
 	.sentence-list {
 		max-height: 55vh; overflow-y: auto; margin-top: .7rem;
 		border-top: 1px solid #eee;
@@ -39,7 +66,14 @@
 		color: #aaa; font-variant-numeric: tabular-nums;
 		min-width: 3.5rem; text-align: right; flex: none;
 	}
-	.sentence-item mark { padding: 0 .1rem; }
+	.sentence-item .item-tag {
+		flex: none; font-size: .66rem; color: #888; align-self: flex-start;
+		border: 1px solid #ddd; border-radius: 3px; padding: 0 .3rem; margin-top: .1rem;
+	}
+	mark {
+		background: #fff1a8; color: inherit; padding: 0 .12rem; border-radius: 2px;
+	}
+	mark.current { background: #f6c343; outline: 1px solid #c9951a; }
 	.sentence-nav { display: flex; gap: .4rem; align-items: center; margin-top: .6rem; }
 	/* "Document" reading mode: sentences re-flowed into prose paragraphs */
 	.sentence-list.reader-mode { border-top: 1px solid #eee; }
@@ -53,9 +87,9 @@
 		font-family: inherit; font-weight: 700; font-size: 1rem;
 		margin: 1.4rem 0 .6rem; color: #1a1a1a;
 	}
-	.reader-doc mark { padding: 0 .1rem; }
 	.reader-doc .sent { border-radius: 2px; }
 	.reader-doc .sent:hover { background: #eef4ff; cursor: default; }
+	.reader-doc .sent.hit { background: #fffbe6; }
 	/* Item section separation */
 	.item-divider {
 		margin: 1.8rem 0 1rem; padding: .55rem .9rem;
@@ -73,6 +107,10 @@
 		background: #e0a800; color: #fff; border-radius: 10px;
 		padding: .1rem .55rem; letter-spacing: .4px;
 	}
+	.item-divider .sec-count {
+		float: right; font-size: .68rem; font-weight: 500; color: #666;
+		margin-left: .6rem; text-transform: none; letter-spacing: 0;
+	}
 	.item-section.cyber {
 		background: #fffcf2; border-left: 3px solid #f2c744;
 		padding: .2rem .6rem .2rem .9rem; border-radius: 0 4px 4px 0;
@@ -84,46 +122,88 @@
 		align-items: center; margin-top: .6rem;
 	}
 	.item-chip-bar .btn { font-size: .74rem; padding: .15rem .6rem; }
+	.empty-state { padding: 1.4rem; text-align: center; color: #888; font-size: .85rem; }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid">
-	<h4 class="mb-1">{{ dataset_label }}</h4>
-	<p class="hint mb-3">
-		Sentence-tokenised full text of 10-K filings (<code>full_10k_sentences.jsonl</code>,
-		~1.7&nbsp;GB). The table below is a filing-level index; the raw sentences are read
-		from disk on demand. Click a row to open its sentences.
-		Numeric columns (<code>cik</code>, <code>filing_date</code>, <code>sentences</code>,
-		<code>characters</code>) accept <code>&gt;</code>, <code>&lt;</code>,
-		<code>&gt;=</code>, <code>&lt;=</code>, <code>=</code> prefixes in the header filter.
-	</p>
+	<div class="page-header">
+		<div>
+			<h4>{{ dataset_label }}</h4>
+			<p class="lead-text">
+				Sentence-tokenised full text of {{ "{:,}".format(total_filings) if total_filings else "" }}
+				10-K filings. The table is a filing-level index; sentences are read from
+				disk on demand. Click a row to browse or search inside a filing.
+				Numeric columns accept <code>&gt;</code>, <code>&lt;</code>, <code>&gt;=</code>,
+				<code>&lt;=</code>, <code>=</code> prefixes in the header filter.
+			</p>
+		</div>
+		<div class="actions">
+			<a class="btn btn-outline-dark btn-sm" href="{{ url_for('nolan_download_raw') }}"
+				title="Download the full source file ({{ raw_file }})">
+				Download raw JSONL{% if raw_size_gb %} ({{ raw_size_gb }} GB){% endif %}
+			</a>
+			<button class="btn btn-outline-secondary btn-sm" id="btnDownload">Download index CSV (filtered)</button>
+			<a class="btn btn-outline-secondary btn-sm" href="{{ github_url }}" target="_blank" rel="noopener">GitHub · seconlab</a>
+		</div>
+	</div>
 
 	<div class="stat-cards" id="datasetStatCards"></div>
 
-	<div class="toolbar">
-		<button class="btn btn-outline-secondary btn-sm" id="btnClearFilters">Clear Filters</button>
-		<button class="btn btn-primary btn-sm" id="btnDownload">Download CSV (filtered)</button>
-		<span class="text-muted small ms-auto" id="loader"></span>
+	<div class="panel">
+		<div class="toolbar">
+			<span class="panel-title mb-0">Filing index</span>
+			<button class="btn btn-outline-secondary btn-sm ms-auto" id="btnClearFilters">Clear filters</button>
+			<span class="text-muted small" id="loader"></span>
+		</div>
+		<div id="data-table"></div>
 	</div>
 
-	<div id="data-table"></div>
-
-	<div class="sentence-panel" id="sentencePanel" style="display:none;">
-		<div class="d-flex flex-wrap align-items-center gap-2">
-			<strong id="sentenceTitle" class="me-2"></strong>
-			<span class="hint" id="sentenceMeta"></span>
-			<div class="ms-auto d-flex gap-2">
-				<a class="btn btn-success btn-sm" id="btnOpenReader" href="#" target="_blank">📖 Open reader</a>
+	<div class="panel sentence-panel" id="sentencePanel" style="display:none;">
+		<div class="filing-head">
+			<div class="filing-id">
+				<span id="sentenceTitle"></span>
+				<small id="sentenceMeta" class="ms-2"></small>
+			</div>
+			<div class="ms-auto d-flex flex-wrap gap-2">
+				<a class="btn btn-outline-success btn-sm" id="btnOpenReader" href="#" target="_blank">Open reader</a>
+				<div class="btn-group btn-group-sm">
+					<button type="button" class="btn btn-outline-secondary dropdown-toggle"
+						data-bs-toggle="dropdown" aria-expanded="false">Download filing</button>
+					<ul class="dropdown-menu dropdown-menu-end">
+						<li><a class="dropdown-item small" id="dlFilingJson" href="#">JSON (sentences + item labels)</a></li>
+						<li><a class="dropdown-item small" id="dlFilingTxt" href="#">Plain text (one sentence per line)</a></li>
+					</ul>
+				</div>
 				<div class="btn-group btn-group-sm" role="group" aria-label="View mode">
 					<button type="button" class="btn btn-outline-secondary" id="btnViewSentences">Sentences</button>
 					<button type="button" class="btn btn-outline-secondary active" id="btnViewDocument">Document</button>
 				</div>
-				<input type="search" class="form-control form-control-sm" id="sentenceSearch"
-					placeholder="Search in this filing…" style="width: 240px;" />
 				<button class="btn btn-outline-secondary btn-sm" id="btnCloseSentences">Close</button>
 			</div>
 		</div>
+
+		<div class="search-bar">
+			<input type="search" class="form-control form-control-sm" id="sentenceSearch"
+				placeholder="Search this filing… e.g. ransomware breach" style="width: 300px;"
+				autocomplete="off" />
+			<select class="form-select form-select-sm" id="searchMode" style="width: 150px;">
+				<option value="all">All words</option>
+				<option value="any">Any word</option>
+				<option value="phrase">Exact phrase</option>
+			</select>
+			<div class="form-check">
+				<input class="form-check-input" type="checkbox" id="searchWhole">
+				<label class="form-check-label" for="searchWhole">Whole words</label>
+			</div>
+			<span class="match-info" id="matchInfo"></span>
+			<div class="match-nav btn-group btn-group-sm ms-auto" id="matchNav" style="display:none;">
+				<button type="button" class="btn btn-outline-secondary" id="btnPrevMatch" title="Previous match (Shift+Enter)">&#8593; Prev</button>
+				<button type="button" class="btn btn-outline-secondary" id="btnNextMatch" title="Next match (Enter)">Next &#8595;</button>
+			</div>
+		</div>
+
 		<div class="item-chip-bar">
 			<span class="hint me-1">Sections:</span>
 			<button type="button" class="btn btn-outline-secondary active" data-item="">All</button>
@@ -131,7 +211,7 @@
 			<button type="button" class="btn btn-outline-warning" data-item="7">Item 7 · MD&amp;A</button>
 			<button type="button" class="btn btn-outline-warning" data-item="8">Item 8 · Financial Statements</button>
 			<button type="button" class="btn btn-outline-warning" data-item="9A">Item 9A · Controls &amp; Procedures</button>
-			<button type="button" class="btn btn-warning" id="btnCyberItems">⚡ Cyber items only (1A + 7 + 8 + 9A)</button>
+			<button type="button" class="btn btn-warning" id="btnCyberItems">Cyber items only (1A + 7 + 8 + 9A)</button>
 		</div>
 		<div class="sentence-list" id="sentenceList"></div>
 		<div class="sentence-nav">
@@ -162,6 +242,9 @@ document.addEventListener("DOMContentLoaded", function () {
 	let viewMode = "document";   // "document" | "sentences"
 	let lastResponse = null;     // cached page so toggling re-renders instantly
 	let itemFilter = new Set();  // empty = all sections
+	let highlightRe = null;      // built from the terms the server matched on
+	let marks = [];              // <mark> elements on the current page
+	let markIndex = -1;
 
 	// Potentially cyber-relevant 10-K items.
 	const CYBER_ITEMS = ["1A", "7", "8", "9A"];
@@ -182,17 +265,29 @@ document.addEventListener("DOMContentLoaded", function () {
 		return CYBER_ITEMS.indexOf(item) >= 0;
 	}
 
-	function makeDivider(item) {
+	function makeDivider(item, count) {
 		const div = document.createElement("div");
 		div.className = "item-divider" + (isCyberItem(item) ? " cyber" : "");
 		div.textContent = itemLabel(item);
 		if (isCyberItem(item)) {
 			const badge = document.createElement("span");
 			badge.className = "cyber-badge";
-			badge.textContent = "\u26a1 cyber";
+			badge.textContent = "cyber";
 			div.appendChild(badge);
 		}
+		if (count != null) {
+			const c = document.createElement("span");
+			c.className = "sec-count";
+			c.textContent = count.toLocaleString() + (count === 1 ? " sentence" : " sentences");
+			div.appendChild(c);
+		}
 		return div;
+	}
+
+	function sectionCounts(items) {
+		const counts = {};
+		items.forEach(function (it) { counts[it.item] = (counts[it.item] || 0) + 1; });
+		return counts;
 	}
 
 	function currentFilterParams() {
@@ -256,7 +351,7 @@ document.addEventListener("DOMContentLoaded", function () {
 				const r = cell.getRow().getData().row;
 				return '<a class="btn btn-sm btn-outline-success py-0" href="/nolan/reader/' + r +
 					'" target="_blank" title="Open the friendly reader" ' +
-					'onclick="event.stopPropagation()">📖 Read</a>';
+					'onclick="event.stopPropagation()">Read</a>';
 			},
 		};
 		return [readerCol].concat(cols.map(function (name) {
@@ -286,13 +381,56 @@ document.addEventListener("DOMContentLoaded", function () {
 			.replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 	}
 
-	function highlight(text, query) {
+	function buildHighlightRe(terms, whole) {
+		if (!terms || !terms.length) return null;
+		const parts = terms
+			.slice().sort(function (a, b) { return b.length - a.length; })
+			.map(function (t) { return t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); });
+		let src = "(" + parts.join("|") + ")";
+		if (whole) src = "(?<!\\w)" + src + "(?!\\w)";
+		return new RegExp(src, "gi");
+	}
+
+	function highlight(text) {
 		const safe = escapeHtml(text);
-		if (!query) return safe;
-		const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-		return safe.replace(new RegExp(escaped, "gi"), function (m) {
-			return "<mark>" + m + "</mark>";
-		});
+		if (!highlightRe) return safe;
+		return safe.replace(highlightRe, function (m) { return "<mark>" + m + "</mark>"; });
+	}
+
+	// Match navigation: collect <mark>s on the page, step through them.
+	function collectMarks() {
+		marks = Array.prototype.slice.call(
+			document.getElementById("sentenceList").querySelectorAll("mark"));
+		markIndex = -1;
+		document.getElementById("matchNav").style.display = marks.length ? "" : "none";
+		updateMatchInfo();
+	}
+
+	function gotoMark(delta) {
+		if (!marks.length) return;
+		if (markIndex >= 0) marks[markIndex].classList.remove("current");
+		markIndex = (markIndex + delta + marks.length) % marks.length;
+		const m = marks[markIndex];
+		m.classList.add("current");
+		m.scrollIntoView({ block: "center", behavior: "smooth" });
+		updateMatchInfo();
+	}
+
+	function updateMatchInfo() {
+		const el = document.getElementById("matchInfo");
+		if (!lastResponse || !lastResponse.terms || !lastResponse.terms.length) {
+			el.textContent = "";
+			return;
+		}
+		const matched = lastResponse.matched;
+		let txt = "<strong>" + matched.toLocaleString() + "</strong> matching sentence" +
+			(matched === 1 ? "" : "s") + " of " + lastResponse.total_sentences.toLocaleString();
+		if (marks.length) {
+			txt += " · <strong>" + marks.length.toLocaleString() + "</strong> occurrence" +
+				(marks.length === 1 ? "" : "s") + " on this page";
+			if (markIndex >= 0) txt += " (" + (markIndex + 1) + "/" + marks.length + ")";
+		}
+		el.innerHTML = txt;
 	}
 
 	// A sentence is treated as a heading when it is short and looks like a
@@ -310,8 +448,9 @@ document.addEventListener("DOMContentLoaded", function () {
 	// index is not contiguous (search mode), or every ~8 sentences as a
 	// readability fallback for very long runs. Each 10-K item gets its own
 	// visually separated section.
-	function renderDocument(list, items, query) {
+	function renderDocument(list, items) {
 		list.classList.add("reader-mode");
+		const counts = sectionCounts(items);
 		const doc = document.createElement("div");
 		doc.className = "reader-doc";
 		let section = null;
@@ -322,7 +461,7 @@ document.addEventListener("DOMContentLoaded", function () {
 		items.forEach(function (item) {
 			if (section === null || item.item !== currentItem) {
 				currentItem = item.item;
-				doc.appendChild(makeDivider(currentItem));
+				doc.appendChild(makeDivider(currentItem, counts[currentItem]));
 				section = document.createElement("section");
 				section.className = "item-section" + (isCyberItem(currentItem) ? " cyber" : "");
 				doc.appendChild(section);
@@ -333,7 +472,7 @@ document.addEventListener("DOMContentLoaded", function () {
 			prevN = item.n;
 			if (isHeading(item.sentence)) {
 				const h = document.createElement("h6");
-				h.innerHTML = highlight(item.sentence, query);
+				h.innerHTML = highlight(item.sentence);
 				h.title = "Sentence " + item.n.toLocaleString();
 				section.appendChild(h);
 				para = null;
@@ -346,30 +485,33 @@ document.addEventListener("DOMContentLoaded", function () {
 				run = 0;
 			}
 			const span = document.createElement("span");
-			span.className = "sent";
+			const html = highlight(item.sentence);
+			span.className = "sent" + (html.indexOf("<mark>") >= 0 ? " hit" : "");
 			span.title = "Sentence " + item.n.toLocaleString() + " \u00b7 " + itemLabel(item.item);
-			span.innerHTML = highlight(item.sentence, query) + " ";
+			span.innerHTML = html + " ";
 			para.appendChild(span);
 			run += 1;
 		});
 		list.appendChild(doc);
 	}
 
-	function renderSentenceList(list, items, query) {
+	function renderSentenceList(list, items) {
 		list.classList.remove("reader-mode");
+		const counts = sectionCounts(items);
 		let currentItem;
 		let first = true;
 		items.forEach(function (item) {
 			if (first || item.item !== currentItem) {
 				currentItem = item.item;
 				first = false;
-				list.appendChild(makeDivider(currentItem));
+				list.appendChild(makeDivider(currentItem, counts[currentItem]));
 			}
 			const div = document.createElement("div");
 			div.className = "sentence-item" + (isCyberItem(item.item) ? " cyber" : "");
 			div.innerHTML =
 				'<span class="idx">' + item.n.toLocaleString() + '</span>' +
-				'<span>' + highlight(item.sentence, query) + '</span>';
+				'<span class="item-tag">' + escapeHtml(item.item || "\u2014") + '</span>' +
+				'<span>' + highlight(item.sentence) + '</span>';
 			list.appendChild(div);
 		});
 	}
@@ -377,22 +519,23 @@ document.addEventListener("DOMContentLoaded", function () {
 	function renderPage() {
 		if (!lastResponse) return;
 		const resp = lastResponse;
-		const query = document.getElementById("sentenceSearch").value.trim();
 		const list = document.getElementById("sentenceList");
 		list.innerHTML = "";
 		if (!resp.data.length) {
 			list.classList.remove("reader-mode");
-			list.innerHTML = '<div class="p-3 hint">No sentences found.</div>';
+			list.innerHTML = '<div class="empty-state">No sentences match the current search / section filter.</div>';
 		} else if (viewMode === "document") {
-			renderDocument(list, resp.data, query);
+			renderDocument(list, resp.data);
 		} else {
-			renderSentenceList(list, resp.data, query);
+			renderSentenceList(list, resp.data);
 		}
 		document.getElementById("sentencePageInfo").textContent =
-			"Page " + currentPage + " of " + lastPage;
+			"Page " + currentPage + " of " + lastPage +
+			" \u00b7 " + resp.matched.toLocaleString() + " sentence" + (resp.matched === 1 ? "" : "s");
 		document.getElementById("btnPrevPage").disabled = currentPage <= 1;
 		document.getElementById("btnNextPage").disabled = currentPage >= lastPage;
 		list.scrollTop = 0;
+		collectMarks();
 	}
 
 	function setViewMode(mode) {
@@ -405,10 +548,14 @@ document.addEventListener("DOMContentLoaded", function () {
 	function loadSentences(row, page) {
 		const query = document.getElementById("sentenceSearch").value.trim();
 		const params = new URLSearchParams({ page: page, size: sentencePageSize });
-		if (query) params.set("q", query);
+		if (query) {
+			params.set("q", query);
+			params.set("mode", document.getElementById("searchMode").value);
+			if (document.getElementById("searchWhole").checked) params.set("whole", "1");
+		}
 		if (itemFilter.size) params.set("items", Array.from(itemFilter).join(","));
 		const list = document.getElementById("sentenceList");
-		list.innerHTML = '<div class="p-3 hint">Loading sentences…</div>';
+		list.innerHTML = '<div class="empty-state">Loading sentences\u2026</div>';
 		fetch(API + "/filing/" + row + "?" + params.toString())
 			.then(function (r) { return r.json(); })
 			.then(function (resp) {
@@ -417,17 +564,17 @@ document.addEventListener("DOMContentLoaded", function () {
 				currentPage = page;
 				lastPage = resp.last_page;
 				lastResponse = resp;
+				highlightRe = buildHighlightRe(resp.terms, resp.whole);
 				document.getElementById("btnOpenReader").href = "/nolan/reader/" + row;
+				document.getElementById("dlFilingJson").href = "/nolan/download/filing/" + row;
+				document.getElementById("dlFilingTxt").href = "/nolan/download/filing/" + row + "?format=txt";
 				document.getElementById("sentenceTitle").textContent =
-					"CIK " + resp.filing.cik + " · " + resp.filing.adsh;
+					"CIK " + resp.filing.cik + " \u00b7 " + resp.filing.adsh;
 				document.getElementById("sentenceMeta").textContent =
-					"filed " + resp.filing.filing_date + " · " +
+					"filed " + resp.filing.filing_date + " \u00b7 " +
 					resp.total_sentences.toLocaleString() + " sentences" +
-					(query || itemFilter.size
-						? " · " + resp.matched.toLocaleString() + " shown"
-						: "") +
 					(itemFilter.size
-						? " (Item " + Array.from(itemFilter).join(", ") + ")"
+						? " \u00b7 Item " + Array.from(itemFilter).join(", ")
 						: "");
 				renderPage();
 			})
@@ -480,6 +627,7 @@ document.addEventListener("DOMContentLoaded", function () {
 				itemFilter.clear();
 				syncChipStates();
 				loadSentences(row.getData().row, 1);
+				document.getElementById("sentencePanel").scrollIntoView({ behavior: "smooth", block: "start" });
 			});
 			refreshStats();
 		})
@@ -495,6 +643,8 @@ document.addEventListener("DOMContentLoaded", function () {
 		document.getElementById("sentencePanel").style.display = "none";
 		currentRow = null;
 		lastResponse = null;
+		highlightRe = null;
+		marks = [];
 	});
 
 	document.getElementById("btnViewDocument").addEventListener("click", function () {
@@ -548,11 +698,27 @@ document.addEventListener("DOMContentLoaded", function () {
 		if (currentRow != null && currentPage < lastPage) loadSentences(currentRow, currentPage + 1);
 	});
 
-	document.getElementById("sentenceSearch").addEventListener("input", function () {
+	const searchInput = document.getElementById("sentenceSearch");
+	searchInput.addEventListener("input", function () {
 		if (currentRow == null) return;
 		clearTimeout(searchTimer);
-		searchTimer = setTimeout(function () { loadSentences(currentRow, 1); }, 300);
+		searchTimer = setTimeout(function () { loadSentences(currentRow, 1); }, 350);
 	});
+	// Enter / Shift+Enter step through highlighted matches.
+	searchInput.addEventListener("keydown", function (e) {
+		if (e.key !== "Enter") return;
+		e.preventDefault();
+		clearTimeout(searchTimer);
+		if (marks.length) gotoMark(e.shiftKey ? -1 : 1);
+		else if (currentRow != null) loadSentences(currentRow, 1);
+	});
+	["searchMode", "searchWhole"].forEach(function (id) {
+		document.getElementById(id).addEventListener("change", function () {
+			if (currentRow != null && searchInput.value.trim()) loadSentences(currentRow, 1);
+		});
+	});
+	document.getElementById("btnPrevMatch").addEventListener("click", function () { gotoMark(-1); });
+	document.getElementById("btnNextMatch").addEventListener("click", function () { gotoMark(1); });
 
 	document.getElementById("btnDownload").addEventListener("click", function () {
 		if (!table) return;

@@ -34,7 +34,7 @@
 		left: 0;
 		height: 4px;
 		width: 0;
-		background: linear-gradient(90deg, var(--accent), #3fa08a);
+		background: var(--accent);
 		z-index: 2000;
 		transition: width 0.1s linear;
 	}
@@ -136,7 +136,10 @@
 	.toc a:hover { background: #f4efe6; }
 	.toc a.active { background: var(--accent-soft); border-left-color: var(--accent); }
 	.toc a.cyber.active { background: var(--cyber-soft); border-left-color: var(--cyber); }
+	.toc a.selected { background: var(--accent-soft); border-left-color: var(--accent); font-weight: 600; }
+	.toc a.cyber.selected { background: var(--cyber-soft); border-left-color: var(--cyber); }
 	.toc a.dimmed { opacity: 0.35; }
+	.toc a.all-link { font-weight: 600; margin-bottom: .4rem; border-bottom: 1px solid var(--line); border-radius: 9px 9px 0 0; padding-bottom: .55rem; }
 	.toc .t-row { display: flex; align-items: baseline; gap: 0.5rem; }
 	.toc .t-chip {
 		flex: none;
@@ -216,36 +219,77 @@
 		font-size: var(--reader-font-size);
 		line-height: 1.85;
 		color: var(--ink);
-		max-width: 760px;
+		max-width: 820px;
 		min-width: 0;
 	}
-	.doc-section { margin-bottom: 0.6rem; }
+	.view-bar {
+		font-family: "Inter", sans-serif;
+		font-size: 0.85rem;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem;
+		background: var(--card);
+		border: 1px solid var(--line);
+		border-radius: 10px;
+		padding: 0.55rem 0.9rem;
+		margin-bottom: 1rem;
+		color: var(--ink-soft);
+	}
+	.view-bar b { color: var(--ink); }
+	.view-bar .btn-soft { padding: 0.25rem 0.75rem; font-size: 0.8rem; }
+	.view-bar .spacer { flex: 1; }
+
+	/* Each 10-K item is a self-contained card with a sticky, colour-coded header. */
+	.doc-section {
+		background: var(--card);
+		border: 1px solid var(--line);
+		border-radius: 10px;
+		margin-bottom: 1.6rem;
+	}
+	.doc-section.cyber { border-color: #e6cfa6; }
 	.doc-section > .sec-head {
-		border-top: 1px solid var(--line);
-		padding-top: 1.9rem;
-		margin: 2.2rem 0 1.1rem;
+		position: sticky;
+		top: 0;
+		z-index: 5;
+		background: #eef1f4;
+		border-bottom: 1px solid var(--line);
+		border-left: 6px solid var(--accent);
+		border-radius: 10px 10px 0 0;
+		padding: 0.75rem 1.1rem 0.7rem;
+		margin: 0;
 		cursor: pointer;
 	}
-	.doc-section:first-child > .sec-head { border-top: none; margin-top: 0.4rem; }
-	.sec-head .overline {
-		font-family: "Inter", sans-serif;
-		font-size: 0.74rem;
-		font-weight: 700;
-		letter-spacing: 0.13em;
-		text-transform: uppercase;
-		color: var(--accent);
+	.doc-section.cyber > .sec-head {
+		background: var(--cyber-soft);
+		border-left-color: var(--cyber);
+	}
+	.doc-section.collapsed > .sec-head { border-radius: 10px; border-bottom: none; }
+	.sec-head .sec-top {
 		display: flex;
 		align-items: center;
-		gap: 0.6rem;
+		flex-wrap: wrap;
+		gap: 0.45rem 0.7rem;
+		font-family: "Inter", sans-serif;
 	}
-	.doc-section.cyber .sec-head .overline { color: var(--cyber); }
+	.sec-head .sec-chip {
+		flex: none;
+		font-size: 0.74rem;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: #fff;
+		background: var(--accent);
+		border-radius: 6px;
+		padding: 0.2rem 0.55rem;
+	}
+	.doc-section.cyber .sec-chip { background: var(--cyber); }
 	.badge-cyber {
-		font-size: 0.68rem;
+		font-family: "Inter", sans-serif;
+		font-size: 0.7rem;
 		font-weight: 600;
-		letter-spacing: 0.02em;
-		text-transform: none;
 		color: var(--cyber);
-		background: var(--cyber-soft);
+		background: #fff;
 		border: 1px solid #eec08a;
 		border-radius: 999px;
 		padding: 0.08rem 0.55rem;
@@ -253,25 +297,28 @@
 	.sec-head h2 {
 		font-family: "Source Serif 4", Georgia, serif;
 		font-weight: 700;
-		font-size: 1.55rem;
-		margin: 0.3rem 0 0.15rem;
+		font-size: 1.3rem;
+		margin: 0;
 		color: var(--ink);
+		line-height: 1.25;
+	}
+	.sec-head .sec-meta {
+		margin-left: auto;
+		font-size: 0.76rem;
+		color: var(--ink-soft);
+		white-space: nowrap;
 	}
 	.sec-head .plain {
 		font-family: "Inter", sans-serif;
-		font-size: 0.9rem;
+		font-size: 0.85rem;
 		color: var(--ink-soft);
+		margin-top: 0.3rem;
 	}
-	.sec-head .sec-meta {
-		font-family: "Inter", sans-serif;
-		font-size: 0.76rem;
-		color: var(--ink-faint);
-		margin-top: 0.25rem;
-	}
-	.sec-head .caret { transition: transform 0.15s ease; display: inline-block; }
+	.sec-head .caret { transition: transform 0.15s ease; display: inline-block; color: var(--ink-faint); font-size: .9rem; }
 	.doc-section.collapsed .sec-head .caret { transform: rotate(-90deg); }
 	.doc-section.collapsed .sec-body { display: none; }
 
+	.sec-body { padding: 1.1rem 1.4rem 0.3rem; }
 	.sec-body p { margin-bottom: 1.15rem; text-align: left; }
 	.sec-body h4 {
 		font-family: "Inter", sans-serif;
@@ -327,7 +374,6 @@
 		padding: 0.5rem 1rem;
 		font-family: "Inter", sans-serif;
 		font-size: 0.85rem;
-		box-shadow: 0 4px 14px rgba(0,0,0,0.08);
 		display: none;
 	}
 	#backTop:hover { border-color: var(--accent); color: var(--accent); }
@@ -350,7 +396,7 @@
 		<div class="hero-actions">
 			<a class="btn-soft" href="/nolan">&larr; All filings</a>
 			<a class="btn-soft" id="edgarLink" href="#" target="_blank" rel="noopener">View original on SEC EDGAR &nearr;</a>
-			<button class="btn-soft" id="btnCyberOnly" type="button">&#9889; Cyber-relevant sections only</button>
+			<button class="btn-soft" id="btnCyberOnly" type="button">Cyber-relevant sections only</button>
 		</div>
 	</div>
 </div>
@@ -386,13 +432,20 @@
 		</div>
 
 		<div class="side-card">
-			<div class="side-title">Contents</div>
+			<div class="side-title">Contents &middot; click a section to read it alone</div>
 			<nav class="toc" id="toc"></nav>
 		</div>
 	</aside>
 
 	<main class="reader-article" id="article">
-		<div class="empty-note">Loading the filing, one moment&hellip;</div>
+		<div class="view-bar" id="viewBar" style="display:none">
+			<span id="viewLabel"></span>
+			<span class="spacer"></span>
+			<button class="btn-soft" id="btnPrevSec" type="button">&larr; Previous</button>
+			<button class="btn-soft" id="btnNextSec" type="button">Next &rarr;</button>
+			<button class="btn-soft" id="btnAllSec" type="button">Show all sections</button>
+		</div>
+		<div id="sections"><div class="empty-note">Loading the filing, one moment&hellip;</div></div>
 	</main>
 </div>
 
@@ -405,11 +458,12 @@
 	"use strict";
 
 	const ROW = {{ row }};
-	const article = document.getElementById("article");
+	const article = document.getElementById("sections");
 	const toc = document.getElementById("toc");
 
 	let DATA = null;
 	let cyberOnly = false;
+	let selected = -1;   // index of the single section being read, -1 = all
 	let query = "";
 	let fontStep = 0;
 	let marks = [];
@@ -488,15 +542,16 @@
 		const head = document.createElement("header");
 		head.className = "sec-head";
 		head.innerHTML =
-			'<div class="overline"><span class="caret">&#9662;</span>' +
-			'<span>' + escapeHtml(chipText(sec.item)) + '</span>' +
-			(sec.cyber ? '<span class="badge-cyber">&#9889; cyber-relevant</span>' : "") +
-			'</div>' +
+			'<div class="sec-top">' +
+			'<span class="caret">&#9662;</span>' +
+			'<span class="sec-chip">' + escapeHtml(chipText(sec.item)) + '</span>' +
 			'<h2>' + escapeHtml(sec.title) + '</h2>' +
-			(sec.plain ? '<div class="plain">' + escapeHtml(sec.plain) + '</div>' : "") +
-			'<div class="sec-meta">' + sec.sentences.length.toLocaleString() +
-			' sentences &middot; starts at sentence ' + sec.start.toLocaleString() +
-			' &middot; click to collapse</div>';
+			(sec.cyber ? '<span class="badge-cyber">cyber-relevant</span>' : "") +
+			'<span class="sec-meta">' + sec.sentences.length.toLocaleString() +
+			' sentences &middot; from #' + sec.start.toLocaleString() + '</span>' +
+			'</div>' +
+			(sec.plain ? '<div class="plain">' + escapeHtml(sec.plain) + '</div>' : "");
+		head.title = "Click to collapse / expand";
 		head.addEventListener("click", function () {
 			wrap.classList.toggle("collapsed");
 		});
@@ -541,14 +596,48 @@
 		return wrap;
 	}
 
+	function visibleIndexes() {
+		return DATA.sections.map(function (s, i) { return i; }).filter(function (i) {
+			return !cyberOnly || DATA.sections[i].cyber;
+		});
+	}
+
+	function selectSection(idx) {
+		selected = idx;
+		render();
+		window.scrollTo({ top: 0 });
+	}
+
+	function updateViewBar() {
+		const bar = document.getElementById("viewBar");
+		if (selected < 0) { bar.style.display = "none"; return; }
+		bar.style.display = "flex";
+		const sec = DATA.sections[selected];
+		const vis = visibleIndexes();
+		const pos = vis.indexOf(selected);
+		document.getElementById("viewLabel").innerHTML =
+			"Reading <b>" + escapeHtml(chipText(sec.item)) + " \u00b7 " + escapeHtml(sec.title) + "</b>" +
+			(pos >= 0 ? " (" + (pos + 1) + " of " + vis.length + ")" : "");
+		document.getElementById("btnPrevSec").disabled = pos <= 0;
+		document.getElementById("btnNextSec").disabled = pos < 0 || pos >= vis.length - 1;
+	}
+
 	function render() {
 		if (!DATA) return;
 		article.innerHTML = "";
 		toc.innerHTML = "";
 
+		const all = document.createElement("a");
+		all.href = "#";
+		all.className = "all-link" + (selected < 0 ? " selected" : "");
+		all.innerHTML = '<span class="t-row"><span class="t-title">All sections</span>' +
+			'<span class="t-count">' + DATA.sections.length + '</span></span>';
+		all.addEventListener("click", function (e) { e.preventDefault(); selectSection(-1); });
+		toc.appendChild(all);
+
 		let shown = 0;
 		DATA.sections.forEach(function (sec, idx) {
-			const hidden = cyberOnly && !sec.cyber;
+			const hidden = (cyberOnly && !sec.cyber) || (selected >= 0 && selected !== idx);
 
 			// article section
 			const el = buildSection(sec, idx);
@@ -558,7 +647,9 @@
 			// toc entry
 			const a = document.createElement("a");
 			a.href = "#sec-" + idx;
-			a.className = (sec.cyber ? "cyber" : "") + (hidden ? " dimmed" : "");
+			a.className = (sec.cyber ? "cyber" : "") +
+				(cyberOnly && !sec.cyber ? " dimmed" : "") +
+				(selected === idx ? " selected" : "");
 			a.innerHTML =
 				'<span class="t-row">' +
 				'<span class="t-chip">' + escapeHtml(chipText(sec.item)) + '</span>' +
@@ -568,9 +659,7 @@
 				(sec.plain ? '<span class="t-plain">' + escapeHtml(sec.plain) + '</span>' : "");
 			a.addEventListener("click", function (e) {
 				e.preventDefault();
-				const target = document.getElementById("sec-" + idx);
-				target.classList.remove("collapsed");
-				target.scrollIntoView({ behavior: "smooth", block: "start" });
+				selectSection(idx);
 			});
 			toc.appendChild(a);
 		});
@@ -582,6 +671,7 @@
 			article.prepend(note);
 		}
 
+		updateViewBar();
 		collectMarks();
 		observeSections();
 	}
@@ -652,8 +742,19 @@
 	document.getElementById("btnCyberOnly").addEventListener("click", function () {
 		cyberOnly = !cyberOnly;
 		this.classList.toggle("active", cyberOnly);
+		if (cyberOnly && selected >= 0 && !DATA.sections[selected].cyber) selected = -1;
 		render();
 		window.scrollTo({ top: 0 });
+	});
+
+	document.getElementById("btnAllSec").addEventListener("click", function () { selectSection(-1); });
+	document.getElementById("btnPrevSec").addEventListener("click", function () {
+		const vis = visibleIndexes(); const pos = vis.indexOf(selected);
+		if (pos > 0) selectSection(vis[pos - 1]);
+	});
+	document.getElementById("btnNextSec").addEventListener("click", function () {
+		const vis = visibleIndexes(); const pos = vis.indexOf(selected);
+		if (pos >= 0 && pos < vis.length - 1) selectSection(vis[pos + 1]);
 	});
 
 	function applyFontSize() {
@@ -678,7 +779,8 @@
 	let observer = null;
 	function observeSections() {
 		if (observer) observer.disconnect();
-		const links = toc.querySelectorAll("a");
+		if (selected >= 0) return;   // scroll-spy only makes sense when all sections are shown
+		const links = toc.querySelectorAll("a[href^='#sec-']");
 		observer = new IntersectionObserver(function (entries) {
 			entries.forEach(function (entry) {
 				if (!entry.isIntersecting) return;

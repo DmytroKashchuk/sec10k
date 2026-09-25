@@ -9,7 +9,9 @@ import time
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
-from flask import Flask, jsonify, render_template, request, send_from_directory
+from flask import (
+    Flask, Response, jsonify, render_template, request, send_from_directory,
+)
 
 import pandas as pd
 
@@ -33,6 +35,8 @@ NOLAN_PATH = os.path.join(NOLAN_DIR, "full_10k_sentences.jsonl")
 NOLAN_INDEX_PATH = os.path.join(NOLAN_DIR, "full_10k_sentences.index.json")
 NOLAN_LABEL = "Full 10-K Sentences (Nolan)"
 NOLAN_SENTENCE_PAGE = 200
+
+GITHUB_URL = "https://github.com/seconlab"
 
 # Per-item sentence CSVs (~1.6 GB in total). They are loaded once into a SQLite
 # database so the pages can filter/sort/paginate without holding them in RAM.
@@ -325,6 +329,23 @@ def read_nolan_filing(row: int):
     """Returns (sentences, per-sentence item labels) for one filing."""
     sentences = read_nolan_sentences(row)
     return sentences, _nolan_filing_cache["items"]
+
+
+def nolan_search_matcher(query: str, mode: str, whole_word: bool):
+    """Returns (predicate, terms). mode: all | any | phrase."""
+    query = (query or "").strip()
+    if not query:
+        return None, []
+    terms = [query] if mode == "phrase" else [t for t in query.split() if t]
+    patterns = []
+    for term in terms:
+        pat = re.escape(term)
+        if whole_word:
+            pat = r"(?<!\w)" + pat + r"(?!\w)"
+        patterns.append(re.compile(pat, re.IGNORECASE))
+    if mode == "any":
+        return (lambda s: any(p.search(s) for p in patterns)), terms
+    return (lambda s: all(p.search(s) for p in patterns)), terms
 
 
 # Matches an "Item N" / "Item NA" token anywhere in a sentence. Sentence
@@ -1166,7 +1187,60 @@ def maryam6():
 
 @app.route("/nolan")
 def nolan():
-    return render_template("nolan.html", dataset_label=NOLAN_LABEL)
+    try:
+        raw_size_gb = round(os.path.getsize(NOLAN_PATH) / 1e9, 2)
+    except OSError:
+        raw_size_gb = None
+    return render_template(
+        "nolan.html",
+        dataset_label=NOLAN_LABEL,
+        raw_file=os.path.basename(NOLAN_PATH),
+        raw_size_gb=raw_size_gb,
+        total_filings=int(len(get_nolan_df())),
+        github_url=GITHUB_URL,
+    )
+
+
+@app.route("/nolan/download/raw")
+def nolan_download_raw():
+    """Streams the full JSONL source file (supports range requests)."""
+    return send_from_directory(
+        NOLAN_DIR, os.path.basename(NOLAN_PATH),
+        as_attachment=True, conditional=True,
+    )
+
+
+@app.route("/nolan/download/filing/<int:row>")
+def nolan_download_filing(row):
+    """One filing as JSON (with item labels) or plain text, one sentence per line."""
+    try:
+        sentences, item_labels = read_nolan_filing(row)
+    except KeyError:
+        return "Unknown filing", 404
+    meta = get_nolan_df()
+    entry = meta[meta["row"] == row].iloc[0]
+    stem = f"10k_{entry['cik']}_{entry['adsh']}"
+    if request.args.get("format") == "txt":
+        body = "\n".join(sentences) + "\n"
+        return Response(
+            body, mimetype="text/plain; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{stem}.txt"'},
+        )
+    payload = {
+        "row": int(entry["row"]),
+        "cik": str(entry["cik"]),
+        "adsh": str(entry["adsh"]),
+        "filing_date": str(entry["filing_date"]),
+        "sentences": [
+            {"n": i + 1, "item": it, "sentence": s}
+            for i, (s, it) in enumerate(zip(sentences, item_labels))
+        ],
+    }
+    return Response(
+        json.dumps(payload, ensure_ascii=False, indent=1),
+        mimetype="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{stem}.json"'},
+    )
 
 
 @app.route("/nolan/reader/<int:row>")
@@ -1271,6 +1345,7 @@ def inject_teyyub_nav():
         "raghavendra_datasets": [
             {"key": k, "label": RAGHAVENDRA_LABELS[k]} for k in RAGHAVENDRA_FILES
         ],
+        "github_url": GITHUB_URL,
     }
 
 
@@ -1812,12 +1887,16 @@ def nolan_filing(row):
     }
 
     query = (request.args.get("q") or "").strip()
-    needle = query.lower()
+    mode = request.args.get("mode", "all")
+    if mode not in ("all", "any", "phrase"):
+        mode = "all"
+    whole_word = request.args.get("whole") == "1"
+    matches, terms = nolan_search_matcher(query, mode, whole_word)
     triples = [
         (i, s, item_labels[i])
         for i, s in enumerate(sentences)
         if (not wanted or item_labels[i] in wanted)
-        and (not needle or needle in s.lower())
+        and (matches is None or matches(s))
     ]
 
     try:
@@ -1842,6 +1921,8 @@ def nolan_filing(row):
         "last_row": total,
         "matched": total,
         "total_sentences": len(sentences),
+        "terms": terms,
+        "whole": whole_word,
         "filing": {
             "row": int(entry["row"]),
             "cik": str(entry["cik"]),
